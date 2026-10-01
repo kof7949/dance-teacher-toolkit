@@ -7,12 +7,21 @@ const Progress = (() => {
     { value: 2, label: 'Solid' },
     { value: 3, label: 'Ready' },
   ];
-  const STYLES = Object.keys(STYLE_META); // ['locking', 'house']
-  const APP_URL = 'https://weihoong1.github.io/dance-teacher-toolkit/';
+  const APP_URL = 'https://kof7949.github.io/dance-teacher-toolkit/';
 
   let root;
-  let state = { view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: STYLES[0], addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '' };
-  let cache = { students: [], skills: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {} };
+  let state = { view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false };
+  let cache = { students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {} };
+
+  function styleIds() { return cache.styles.map((s) => s.id); }
+  function styleMeta(id) { return cache.styles.find((s) => s.id === id) || { id, label: id, emoji: '⭐' }; }
+  function slugify(label) {
+    const base = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'style';
+    let id = base;
+    let n = 2;
+    while (cache.styles.some((s) => s.id === id)) { id = `${base}-${n++}`; }
+    return id;
+  }
 
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, (c) => ({
@@ -27,12 +36,13 @@ const Progress = (() => {
 
   function styleBadges(styles) {
     if (!styles || !styles.length) return '<span class="sub">No style set</span>';
-    return styles.map((s) => `<span class="sub">${STYLE_META[s].emoji} ${STYLE_META[s].label}</span>`).join(' ');
+    return styles.map((s) => `<span class="sub">${escapeHtml(styleMeta(s).emoji)} ${escapeHtml(styleMeta(s).label)}</span>`).join(' ');
   }
 
   async function loadAll() {
     cache.students = (await DB.getAll('students')).sort((a, b) => a.name.localeCompare(b.name));
     cache.skills = (await DB.getAll('skills')).sort((a, b) => a.order - b.order);
+    cache.styles = (await DB.getAll('styles')).sort((a, b) => a.order - b.order);
     const orderRecords = await DB.getAll('categoryOrder');
     cache.categoryOrder = {};
     orderRecords.forEach((r) => { cache.categoryOrder[r.id] = r.order; });
@@ -57,7 +67,7 @@ const Progress = (() => {
   // falling back to first-appearance order for any category not yet in that saved list.
   function groupSkillsByStyleAndCategory() {
     const unordered = {};
-    STYLES.forEach((s) => { unordered[s] = {}; });
+    styleIds().forEach((s) => { unordered[s] = {}; });
     cache.skills.forEach((s) => {
       if (!unordered[s.style]) unordered[s.style] = {};
       if (!unordered[s.style][s.category]) unordered[s.style][s.category] = [];
@@ -65,7 +75,7 @@ const Progress = (() => {
     });
 
     const groups = {};
-    STYLES.forEach((styleKey) => {
+    styleIds().forEach((styleKey) => {
       const catMap = unordered[styleKey] || {};
       const savedOrder = cache.categoryOrder[styleKey] || [];
       const orderedNames = [
@@ -79,9 +89,9 @@ const Progress = (() => {
   }
 
   function styleChipsHtml(selectedSet, dataAttr) {
-    return STYLES.map((s) => `
+    return styleIds().map((s) => `
       <button class="chip style-chip ${selectedSet.has(s) ? 'active' : ''}" data-${dataAttr}="${s}">
-        ${STYLE_META[s].emoji} ${STYLE_META[s].label}
+        ${escapeHtml(styleMeta(s).emoji)} ${escapeHtml(styleMeta(s).label)}
       </button>
     `).join('');
   }
@@ -115,7 +125,10 @@ const Progress = (() => {
         <input type="text" id="student-search" placeholder="🔍 Search students…" value="${escapeHtml(state.studentSearchQuery || '')}" />
       </div>
       <div class="student-list" id="student-list-container">${studentRowsHtml(state.studentSearchQuery)}</div>
-      <button class="btn btn-text" data-action="manage-skills">Edit skill checklist</button>
+      <div class="tag-buttons" style="margin-bottom:8px;">
+        <button class="btn btn-text" data-action="manage-skills">Edit skill checklist</button>
+        <button class="btn btn-text" data-action="manage-styles">Manage dance styles</button>
+      </div>
       <div class="card" style="margin-top:16px;">
         <div class="section-title" style="margin-top:0;">Backup</div>
         <div class="tag-label">Skills, students and progress are only saved on this device/browser. Export a backup here, then import it on your phone to bring everything over.</div>
@@ -147,9 +160,9 @@ const Progress = (() => {
 
     const styleTogglesHtml = `
       <div class="tag-buttons" style="margin-bottom:14px;">
-        ${STYLES.map((s) => `
+        ${styleIds().map((s) => `
           <button class="chip style-chip ${studentStyles.includes(s) ? 'active' : ''}" data-toggle-style="${s}">
-            ${STYLE_META[s].emoji} ${STYLE_META[s].label}
+            ${escapeHtml(styleMeta(s).emoji)} ${escapeHtml(styleMeta(s).label)}
           </button>
         `).join('')}
       </div>
@@ -181,7 +194,7 @@ const Progress = (() => {
             }).join('')}
           </div>
         `).join('');
-        return `<div class="section-title" style="margin-top:6px;">${STYLE_META[styleKey].emoji} ${STYLE_META[styleKey].label}</div>${catsHtml}`;
+        return `<div class="section-title" style="margin-top:6px;">${escapeHtml(styleMeta(styleKey).emoji)} ${escapeHtml(styleMeta(styleKey).label)}</div>${catsHtml}`;
       }).join('');
     }
 
@@ -222,7 +235,7 @@ const Progress = (() => {
 
   function renderManageSkills() {
     const allGroups = groupSkillsByStyleAndCategory();
-    const activeStyle = state.manageStyle || STYLES[0];
+    const activeStyle = state.manageStyle || styleIds()[0];
     const categories = allGroups[activeStyle] || {};
     const catNames = Object.keys(categories);
     const selectedCatValue = (state.newSkillCategoryValue && (catNames.includes(state.newSkillCategoryValue) || state.newSkillCategoryValue === '__new__'))
@@ -244,9 +257,9 @@ const Progress = (() => {
       </div>
     `).join('') || '<div class="empty-state">No skills yet for this style.</div>';
 
-    const styleTabsHtml = STYLES.map((s) => `
+    const styleTabsHtml = styleIds().map((s) => `
       <button class="chip style-chip ${activeStyle === s ? 'active' : ''}" data-manage-style="${s}">
-        ${STYLE_META[s].emoji} ${STYLE_META[s].label}
+        ${escapeHtml(styleMeta(s).emoji)} ${escapeHtml(styleMeta(s).label)}
       </button>
     `).join('');
 
@@ -269,8 +282,37 @@ const Progress = (() => {
           <input type="text" id="new-skill-category-new" placeholder="New category name" />
         </div>
       ` : ''}
-      <button class="btn btn-small" data-action="add-skill" style="margin-bottom:16px;">Add skill to ${STYLE_META[activeStyle].label}</button>
+      <button class="btn btn-small" data-action="add-skill" style="margin-bottom:16px;">Add skill to ${escapeHtml(styleMeta(activeStyle).label)}</button>
       ${catsHtml}
+    `;
+  }
+
+  function renderManageStyles() {
+    const rows = cache.styles.map((s) => {
+      const skillCount = cache.skills.filter((sk) => sk.style === s.id).length;
+      return `
+        <div class="student-card">
+          <div>
+            <div class="name">${escapeHtml(s.emoji)} ${escapeHtml(s.label)}</div>
+            <div class="sub">${skillCount} skill${skillCount === 1 ? '' : 's'}</div>
+          </div>
+          <button class="btn btn-small btn-danger" data-del-style="${s.id}">Remove</button>
+        </div>
+      `;
+    }).join('') || '<div class="empty-state">No styles yet.</div>';
+
+    return `
+      <div class="back-row">
+        <button class="btn btn-small" data-action="back-to-list">← Back</button>
+      </div>
+      <div class="section-title">Manage dance styles</div>
+      <div class="tag-label">Each style gets its own skill checklist and its own tab when assigning students. After adding a style here, use "Edit skill checklist" to build out its categories and skills.</div>
+      <div class="student-list" style="margin-bottom:16px;">${rows}</div>
+      <div class="add-row">
+        <input type="text" id="new-style-label" placeholder="Style name, e.g. Popping" />
+        <input type="text" id="new-style-emoji" placeholder="Icon" style="flex:0 0 70px;" maxlength="4" />
+      </div>
+      <button class="btn btn-small" data-action="add-style">Add style</button>
     `;
   }
 
@@ -280,6 +322,8 @@ const Progress = (() => {
       root.innerHTML = renderStudent(state.studentId);
     } else if (state.view === 'manage-skills') {
       root.innerHTML = renderManageSkills();
+    } else if (state.view === 'manage-styles') {
+      root.innerHTML = renderManageStyles();
     } else {
       state.view = 'list';
       root.innerHTML = renderList();
@@ -301,7 +345,8 @@ const Progress = (() => {
           .map((skill) => ({ name: skill.name, label: LEVELS.find((l) => l.value === progress[skill.id].level).label }));
         if (recordedSkills.length) catList.push({ name: cat, skills: recordedSkills });
       });
-      if (catList.length) styles.push({ key: styleKey, label: STYLE_META[styleKey].label, categories: catList });
+      // Not HTML output (used only in the PDF report), so no escaping needed here.
+      if (catList.length) styles.push({ key: styleKey, label: styleMeta(styleKey).label, categories: catList });
     });
     return { student, styles };
   }
@@ -471,7 +516,7 @@ const Progress = (() => {
     if (type === 'category') {
       const { category, insertBeforeCategory } = dragState;
       dragState = null;
-      const activeStyle = state.manageStyle || STYLES[0];
+      const activeStyle = state.manageStyle || styleIds()[0];
       const allGroups = groupSkillsByStyleAndCategory();
       const currentNames = Object.keys(allGroups[activeStyle] || {});
       const reordered = currentNames.filter((c) => c !== category);
@@ -601,6 +646,7 @@ const Progress = (() => {
       const openId = e.target.closest('[data-open]')?.dataset.open;
       const setLevelAttr = e.target.closest('[data-set-level]')?.dataset.setLevel;
       const delSkillId = e.target.closest('[data-del-skill]')?.dataset.delSkill;
+      const delStyleId = e.target.closest('[data-del-style]')?.dataset.delStyle;
       const newStyleBtn = e.target.closest('[data-new-style]');
       const toggleStyleBtn = e.target.closest('[data-toggle-style]');
       const manageStyleBtn = e.target.closest('[data-manage-style]');
@@ -636,6 +682,29 @@ const Progress = (() => {
         const allHistory = await DB.getAll('history');
         for (const h of allHistory) if (h.skillId === delSkillId) await DB.delete('history', h.id);
         await DB.delete('skills', delSkillId);
+        await loadAll();
+        return render();
+      }
+      if (delStyleId) {
+        const meta = styleMeta(delStyleId);
+        if (!confirm(`Remove "${meta.label}"? This also deletes all of its skills and any recorded progress for them, for every student.`)) return;
+
+        const styleSkills = cache.skills.filter((s) => s.style === delStyleId);
+        const skillIds = new Set(styleSkills.map((s) => s.id));
+        const allProgress = await DB.getAll('progress');
+        for (const p of allProgress) if (skillIds.has(p.skillId)) await DB.delete('progress', p.id);
+        const allHistory = await DB.getAll('history');
+        for (const h of allHistory) if (skillIds.has(h.skillId)) await DB.delete('history', h.id);
+        for (const s of styleSkills) await DB.delete('skills', s.id);
+        await DB.delete('categoryOrder', delStyleId);
+        for (const student of cache.students) {
+          if (student.styles && student.styles.includes(delStyleId)) {
+            student.styles = student.styles.filter((s) => s !== delStyleId);
+            await DB.put('students', student);
+          }
+        }
+        await DB.delete('styles', delStyleId);
+        if (state.manageStyle === delStyleId) state.manageStyle = null;
         await loadAll();
         return render();
       }
@@ -690,6 +759,20 @@ const Progress = (() => {
         case 'manage-skills':
           state.view = 'manage-skills';
           return render();
+        case 'manage-styles':
+          state.view = 'manage-styles';
+          return render();
+        case 'add-style': {
+          const labelInput = document.getElementById('new-style-label');
+          const emojiInput = document.getElementById('new-style-emoji');
+          const label = labelInput.value.trim();
+          if (!label) return;
+          const emoji = emojiInput.value.trim() || '⭐';
+          const id = slugify(label);
+          await DB.put('styles', { id, label, emoji, order: cache.styles.length });
+          await loadAll();
+          return render();
+        }
         case 'share-app-link': {
           const out = document.getElementById('share-app-output');
           if (navigator.share) {
@@ -740,7 +823,7 @@ const Progress = (() => {
           const catSelect = document.getElementById('new-skill-category-select');
           const catNewInput = document.getElementById('new-skill-category-new');
           const nameInput = document.getElementById('new-skill-name');
-          const style = state.manageStyle || STYLES[0];
+          const style = state.manageStyle || styleIds()[0];
           let category = catSelect.value;
           if (category === '__new__') category = (catNewInput?.value || '').trim();
           const name = nameInput.value.trim();

@@ -1,6 +1,6 @@
 // Minimal promise-based IndexedDB wrapper. No external deps.
 const DB_NAME = 'dance-toolkit';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise = null;
 
@@ -33,6 +33,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('categoryOrder')) {
         db.createObjectStore('categoryOrder', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('styles')) {
+        db.createObjectStore('styles', { keyPath: 'id' });
       }
     };
     req.onsuccess = () => resolve(req.result);
