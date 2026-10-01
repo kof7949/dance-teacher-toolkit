@@ -8,6 +8,7 @@ const Progress = (() => {
     { value: 3, label: 'Ready' },
   ];
   const STYLES = Object.keys(STYLE_META); // ['locking', 'house']
+  const APP_URL = 'https://weihoong1.github.io/dance-teacher-toolkit/';
 
   let root;
   let state = { view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: STYLES[0], addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '' };
@@ -124,6 +125,15 @@ const Progress = (() => {
           <input type="file" id="import-backup-file" accept="application/json" hidden />
         </div>
         <div id="backup-output"></div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">Share this app</div>
+        <div class="tag-label">Send this link to other instructors so they can open (and install) the app themselves.</div>
+        <div class="summary-box" style="word-break:break-all;">${APP_URL}</div>
+        <div class="tag-buttons" style="margin-top:10px;">
+          <button class="btn btn-small" data-action="share-app-link">🔗 Share app link</button>
+        </div>
+        <div id="share-app-output"></div>
       </div>
     `;
   }
@@ -680,6 +690,24 @@ const Progress = (() => {
         case 'manage-skills':
           state.view = 'manage-skills';
           return render();
+        case 'share-app-link': {
+          const out = document.getElementById('share-app-output');
+          if (navigator.share) {
+            try {
+              await navigator.share({ title: 'Dance Teacher Toolkit', text: 'Dance Teacher Toolkit — music slow-down/count tool and student progress tracker', url: APP_URL });
+              return;
+            } catch (err) { /* user cancelled or unsupported, fall through to copy */ }
+          }
+          if (navigator.clipboard) {
+            try {
+              await navigator.clipboard.writeText(APP_URL);
+              if (out) out.innerHTML = '<div class="summary-box">Link copied to clipboard.</div>';
+              return;
+            } catch (err) { /* ignore */ }
+          }
+          if (out) out.innerHTML = `<div class="summary-box">Copy this link: ${escapeHtml(APP_URL)}</div>`;
+          return;
+        }
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
