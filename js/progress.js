@@ -631,6 +631,27 @@ const Progress = (() => {
             throw new Error('This file does not look like a Dance Teacher Toolkit backup.');
           }
           for (const s of (data.styles || [])) await DB.put('styles', s);
+
+          // Any skill already on this device (e.g. seeded defaults on a fresh install)
+          // that matches an incoming skill by style+name but has a different id would
+          // otherwise sit duplicated alongside the imported one. The imported skill is
+          // the one with real progress/history tied to it, so the local duplicate loses.
+          const existingSkills = await DB.getAll('skills');
+          const incomingKeys = new Set(data.skills.map((s) => `${s.style}::${s.name.trim().toLowerCase()}`));
+          const importedIds = new Set(data.skills.map((s) => s.id));
+          let removedDupes = 0;
+          for (const existing of existingSkills) {
+            const key = `${existing.style}::${existing.name.trim().toLowerCase()}`;
+            if (incomingKeys.has(key) && !importedIds.has(existing.id)) {
+              const allProgress = await DB.getAll('progress');
+              for (const p of allProgress) if (p.skillId === existing.id) await DB.delete('progress', p.id);
+              const allHistory = await DB.getAll('history');
+              for (const h of allHistory) if (h.skillId === existing.id) await DB.delete('history', h.id);
+              await DB.delete('skills', existing.id);
+              removedDupes++;
+            }
+          }
+
           for (const s of data.skills) await DB.put('skills', s);
           for (const c of (data.categoryOrder || [])) await DB.put('categoryOrder', c);
           for (const s of data.students) await DB.put('students', s);
@@ -640,7 +661,10 @@ const Progress = (() => {
           state.view = 'list';
           await render();
           const out2 = document.getElementById('backup-output');
-          if (out2) out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s).</div>`;
+          if (out2) {
+            const dupeNote = removedDupes ? ` (removed ${removedDupes} duplicate skill${removedDupes === 1 ? '' : 's'})` : '';
+            out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s)${dupeNote}.</div>`;
+          }
         } catch (err) {
           if (out) out.innerHTML = `<div class="summary-box">Import failed: ${escapeHtml(err.message)}</div>`;
         }
