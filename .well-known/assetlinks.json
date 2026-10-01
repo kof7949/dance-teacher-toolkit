@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.weihoong1.twa",
+      "sha256_cert_fingerprints": [
+        "A5:F2:AD:BB:08:1A:B5:64:3A:7C:62:36:98:EE:19:AB:85:06:8E:E5:7D:3D:B7:6B:10:13:C5:64:94:2E:36:8A"
+      ]
+    }
+  }
+]
