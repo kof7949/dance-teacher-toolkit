@@ -625,6 +625,7 @@ const Progress = (() => {
           if (data.type !== 'progress-backup' || !Array.isArray(data.skills) || !Array.isArray(data.students)) {
             throw new Error('This file does not look like a Dance Teacher Toolkit backup.');
           }
+          for (const s of (data.styles || [])) await DB.put('styles', s);
           for (const s of data.skills) await DB.put('skills', s);
           for (const c of (data.categoryOrder || [])) await DB.put('categoryOrder', c);
           for (const s of data.students) await DB.put('students', s);
@@ -794,13 +795,13 @@ const Progress = (() => {
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
-          const [skills, categoryOrderRecords, students, progress, history] = await Promise.all([
-            DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'),
+          const [skills, categoryOrderRecords, students, progress, history, styles] = await Promise.all([
+            DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
           ]);
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 1,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 2,
             exportedAt: new Date().toISOString(),
-            skills, categoryOrder: categoryOrderRecords, students, progress, history,
+            skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
