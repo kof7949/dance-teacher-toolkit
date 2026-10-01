@@ -277,7 +277,7 @@ const Progress = (() => {
         </select>
         <input type="text" id="new-skill-name" placeholder="Skill name" />
       </div>
-      ${state.addingNewCategory ? `
+      ${selectedCatValue === '__new__' ? `
         <div class="add-row">
           <input type="text" id="new-skill-category-new" placeholder="New category name" />
         </div>
