@@ -43,8 +43,31 @@
   });
 
   if ('serviceWorker' in navigator) {
+    let reloadingForUpdate = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadingForUpdate) return;
+      reloadingForUpdate = true;
+      window.location.reload();
+    });
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then((reg) => {
+        // Cache-first service workers can otherwise keep serving stale JS for a long time:
+        // explicitly ask the browser to check for a new sw.js on every launch, rather than
+        // waiting for its own internal update schedule.
+        reg.update().catch(() => {});
+      }).catch(() => {});
     });
   }
+
+  window.forceAppUpdate = async function forceAppUpdate() {
+    if (!('serviceWorker' in navigator)) {
+      window.location.reload();
+      return;
+    }
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const reg of regs) await reg.unregister();
+    const names = await caches.keys();
+    for (const name of names) await caches.delete(name);
+    window.location.reload();
+  };
 })();

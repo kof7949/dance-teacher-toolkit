@@ -148,6 +148,11 @@ const Progress = (() => {
         </div>
         <div id="share-app-output"></div>
       </div>
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">App updates</div>
+        <div class="tag-label">This app caches itself for offline use, so a new fix can sometimes take a while to reach your phone on its own. Tap this if something I fixed doesn't seem to show up yet — it only refreshes the app's code, your students/progress/skills are never touched.</div>
+        <button class="btn btn-small" data-action="force-update">🔄 Check for updates</button>
+      </div>
     `;
   }
 
@@ -773,6 +778,12 @@ const Progress = (() => {
           await DB.put('styles', { id, label, emoji, order: cache.styles.length });
           await loadAll();
           return render();
+        }
+        case 'force-update': {
+          const btn = e.target.closest('[data-action="force-update"]');
+          if (btn) { btn.disabled = true; btn.textContent = 'Refreshing…'; }
+          if (window.forceAppUpdate) await window.forceAppUpdate();
+          return;
         }
         case 'share-app-link': {
           const out = document.getElementById('share-app-output');
