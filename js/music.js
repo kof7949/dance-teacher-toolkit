@@ -13,6 +13,13 @@ const Music = (() => {
     return m + ':' + String(s).padStart(2, '0');
   }
 
+  function fmtTimePrecise(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    const m = Math.floor(sec / 60);
+    const s = (sec % 60).toFixed(1).padStart(4, '0');
+    return m + ':' + s;
+  }
+
   function cacheEls() {
     el.songSelect = document.getElementById('song-select');
     el.songFile = document.getElementById('song-file');
@@ -44,6 +51,8 @@ const Music = (() => {
     el.nudgeInPlus = document.getElementById('btn-nudge-in-plus');
     el.nudgeOutMinus = document.getElementById('btn-nudge-out-minus');
     el.nudgeOutPlus = document.getElementById('btn-nudge-out-plus');
+    el.loopInTime = document.getElementById('loop-in-time');
+    el.loopOutTime = document.getElementById('loop-out-time');
   }
 
   async function decodePeaks(arrayBuffer, buckets = 320) {
@@ -141,6 +150,8 @@ const Music = (() => {
     el.nudgeInPlus.disabled = loopStart == null;
     el.nudgeOutMinus.disabled = loopEnd == null;
     el.nudgeOutPlus.disabled = loopEnd == null;
+    el.loopInTime.textContent = loopStart == null ? '--' : fmtTimePrecise(loopStart);
+    el.loopOutTime.textContent = loopEnd == null ? '--' : fmtTimePrecise(loopEnd);
   }
 
   function hideLoopRegion() {
