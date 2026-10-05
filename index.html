@@ -47,6 +47,19 @@
           <button id="btn-play" class="btn btn-play" disabled>▶</button>
           <button id="btn-loop-end" class="btn btn-ghost" title="Set the loop's end point here">Set Out</button>
         </div>
+
+        <div class="nudge-row">
+          <div class="nudge-group">
+            <span class="nudge-label">In</span>
+            <button class="btn btn-small btn-nudge" id="btn-nudge-in-minus" data-nudge="in" data-delta="-0.1" disabled>−0.1s</button>
+            <button class="btn btn-small btn-nudge" id="btn-nudge-in-plus" data-nudge="in" data-delta="0.1" disabled>+0.1s</button>
+          </div>
+          <div class="nudge-group">
+            <span class="nudge-label">Out</span>
+            <button class="btn btn-small btn-nudge" id="btn-nudge-out-minus" data-nudge="out" data-delta="-0.1" disabled>−0.1s</button>
+            <button class="btn btn-small btn-nudge" id="btn-nudge-out-plus" data-nudge="out" data-delta="0.1" disabled>+0.1s</button>
+          </div>
+        </div>
       </div>
 
       <div class="card">

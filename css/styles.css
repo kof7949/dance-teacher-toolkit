@@ -183,6 +183,15 @@ main {
   margin: 10px 0;
 }
 
+.nudge-row {
+  display: flex; align-items: center; justify-content: center; gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.nudge-group { display: flex; align-items: center; gap: 6px; }
+.nudge-label { font-size: 0.78rem; color: var(--text-dim); margin-right: 2px; }
+.btn-nudge { padding: 6px 10px; font-size: 0.76rem; }
+
 .loop-toggle-row {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;

@@ -40,6 +40,10 @@ const Music = (() => {
     el.tagList = document.getElementById('tag-list');
     el.audio = document.getElementById('audio-player');
     el.btnDeleteSong = document.getElementById('btn-delete-song');
+    el.nudgeInMinus = document.getElementById('btn-nudge-in-minus');
+    el.nudgeInPlus = document.getElementById('btn-nudge-in-plus');
+    el.nudgeOutMinus = document.getElementById('btn-nudge-out-minus');
+    el.nudgeOutPlus = document.getElementById('btn-nudge-out-plus');
   }
 
   async function decodePeaks(arrayBuffer, buckets = 320) {
@@ -132,15 +136,24 @@ const Music = (() => {
     renderTags(tags.sort((a, b) => a.time - b.time));
   }
 
+  function updateNudgeButtonsState() {
+    el.nudgeInMinus.disabled = loopStart == null;
+    el.nudgeInPlus.disabled = loopStart == null;
+    el.nudgeOutMinus.disabled = loopEnd == null;
+    el.nudgeOutPlus.disabled = loopEnd == null;
+  }
+
   function hideLoopRegion() {
     el.loopRegion.hidden = true;
     el.loopInMarker.hidden = true;
     el.loopOutMarker.hidden = true;
+    updateNudgeButtonsState();
   }
 
   function updateLoopRegionUI() {
     if (!currentSong) { hideLoopRegion(); return; }
     const dur = currentSong.duration || 1;
+    updateNudgeButtonsState();
 
     if (loopStart != null && loopEnd != null) {
       el.loopInMarker.hidden = true;
@@ -166,6 +179,23 @@ const Music = (() => {
     } else {
       el.loopOutMarker.hidden = true;
     }
+  }
+
+  function nudgeLoopPoint(which, delta) {
+    if (!currentSong) return;
+    const dur = currentSong.duration || 0;
+    if (which === 'in') {
+      if (loopStart == null) return;
+      const maxVal = loopEnd != null ? Math.max(0, loopEnd - 0.05) : dur;
+      loopStart = Math.min(maxVal, Math.max(0, loopStart + delta));
+      el.audio.currentTime = loopStart;
+    } else {
+      if (loopEnd == null) return;
+      const minVal = loopStart != null ? Math.min(dur, loopStart + 0.05) : 0;
+      loopEnd = Math.max(minVal, Math.min(dur, loopEnd + delta));
+      el.audio.currentTime = loopEnd;
+    }
+    updateLoopRegionUI();
   }
 
   let scrubbing = false;
@@ -302,6 +332,11 @@ const Music = (() => {
       el.loopEnabled.checked = false;
       hideLoopRegion();
     });
+
+    el.nudgeInMinus.addEventListener('click', () => nudgeLoopPoint('in', -0.1));
+    el.nudgeInPlus.addEventListener('click', () => nudgeLoopPoint('in', 0.1));
+    el.nudgeOutMinus.addEventListener('click', () => nudgeLoopPoint('out', -0.1));
+    el.nudgeOutPlus.addEventListener('click', () => nudgeLoopPoint('out', 0.1));
 
     el.speedSlider.addEventListener('input', () => setSpeed(el.speedSlider.value));
     el.speedChips.forEach((chip) => {
