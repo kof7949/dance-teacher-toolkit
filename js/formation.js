@@ -5,7 +5,7 @@ const Formation = (() => {
   const COLORS = ['#a855f7', '#ec4899', '#22d3ee', '#fbbf24', '#34d399', '#f87171', '#60a5fa', '#f472b6', '#fb923c', '#a3e635'];
 
   let root;
-  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false };
+  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false };
   let cache = { routines: [], dancers: [], formations: [], positions: {} }; // positions keyed by formationId -> array
   let dragInfo = null;
   let playTimer = null;
@@ -139,6 +139,27 @@ const Formation = (() => {
     `;
   }
 
+  function formationHeaderHtml(formation) {
+    if (!formation) return '';
+    if (state.editingFormationName) {
+      return `
+        <div class="add-row" style="margin-bottom:10px;">
+          <input type="text" id="edit-formation-name" value="${escapeHtml(formation.label)}" />
+          <button class="btn btn-small" data-action="save-formation-name" data-id="${formation.id}">Save</button>
+          <button class="btn btn-small btn-text" data-action="cancel-rename-formation">Cancel</button>
+        </div>
+      `;
+    }
+    return `
+      <div class="back-row" style="margin-bottom:10px;">
+        <strong>${escapeHtml(formation.label)}</strong>
+        <div style="flex:1"></div>
+        <button class="btn btn-small" data-action="rename-formation">✎ Rename</button>
+        <button class="btn btn-small btn-danger" data-action="delete-formation" data-id="${formation.id}">🗑 Delete</button>
+      </div>
+    `;
+  }
+
   function selectedDancerNoteHtml() {
     if (!state.selectedDancerId || !state.currentFormationId) return '';
     const dancer = cache.dancers.find((d) => d.id === state.selectedDancerId);
@@ -172,6 +193,7 @@ const Formation = (() => {
       <div class="card">
         <div class="section-title" style="margin-top:0;">Formations</div>
         ${formationStripHtml()}
+        <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
         ${cache.dancers.length === 0
           ? '<div class="empty-state">Add some dancers above before building a formation.</div>'
           : (!formation ? '<div class="empty-state">Tap "+ Add formation" to place your first formation.</div>' : stageHtml())}
@@ -182,7 +204,7 @@ const Formation = (() => {
             <button class="btn btn-ghost" data-action="next-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>Next ▶</button>
           </div>
           <div class="tag-label" style="text-align:center;margin-top:6px;">Tap a dancer dot to add a note for this formation</div>
-          ${selectedDancerNoteHtml()}
+          <div id="formation-note-wrap">${selectedDancerNoteHtml()}</div>
         ` : ''}
       </div>
 
@@ -218,12 +240,29 @@ const Formation = (() => {
   async function switchToFormation(formationId) {
     state.currentFormationId = formationId;
     state.selectedDancerId = null;
+    state.editingFormationName = false;
     await ensurePositionsForFormation(formationId);
-    // Re-render just the stage + strip so the glide transition plays, rather than a full re-render.
-    const stageWrap = root.querySelector('.stage-wrap');
-    if (stageWrap) stageWrap.outerHTML = stageHtml();
+
+    // Update each existing dot's left/top in place (rather than recreating the stage)
+    // so the CSS left/top transition actually has a prior value to animate from.
+    const stage = document.getElementById('stage');
+    if (stage) {
+      cache.dancers.forEach((d) => {
+        const dot = stage.querySelector(`[data-dancer-dot="${d.id}"]`);
+        if (!dot) return;
+        const pos = getPosition(formationId, d.id);
+        dot.style.left = pos.x + '%';
+        dot.style.top = pos.y + '%';
+        dot.classList.remove('selected');
+      });
+    }
+
     const strip = document.getElementById('formation-strip');
     if (strip) strip.outerHTML = formationStripHtml();
+    const headerWrap = document.getElementById('formation-header-wrap');
+    if (headerWrap) headerWrap.innerHTML = formationHeaderHtml(cache.formations.find((f) => f.id === formationId));
+    const noteWrap = document.getElementById('formation-note-wrap');
+    if (noteWrap) noteWrap.innerHTML = selectedDancerNoteHtml();
   }
 
   function stepFormation(delta) {
@@ -366,6 +405,7 @@ const Formation = (() => {
         state.routineId = openRoutineId;
         state.currentFormationId = null;
         state.selectedDancerId = null;
+        state.editingFormationName = false;
         return render();
       }
       if (openFormationId) {
@@ -404,6 +444,7 @@ const Formation = (() => {
           stopPlay();
           state.view = 'list';
           state.routineId = null;
+          state.editingFormationName = false;
           return render();
         case 'delete-routine': {
           const id = e.target.closest('[data-id]').dataset.id;
@@ -440,6 +481,41 @@ const Formation = (() => {
             });
           }
           state.currentFormationId = newFormation.id;
+          state.editingFormationName = false;
+          return render();
+        }
+        case 'rename-formation':
+          state.editingFormationName = true;
+          return render();
+        case 'cancel-rename-formation':
+          state.editingFormationName = false;
+          return render();
+        case 'save-formation-name': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const input = document.getElementById('edit-formation-name');
+          const label = input.value.trim();
+          if (!label) return;
+          const formationToRename = cache.formations.find((f) => f.id === id);
+          if (!formationToRename) return;
+          formationToRename.label = label;
+          await DB.put('formations', formationToRename);
+          state.editingFormationName = false;
+          return render();
+        }
+        case 'delete-formation': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          if (!confirm('Delete this formation? This cannot be undone.')) return;
+          stopPlay();
+          const positionsToDelete = cache.positions[id] || [];
+          for (const p of positionsToDelete) await DB.delete('positions', p.id);
+          await DB.delete('formations', id);
+          delete cache.positions[id];
+          cache.formations = cache.formations.filter((f) => f.id !== id);
+          if (state.currentFormationId === id) {
+            state.currentFormationId = cache.formations[0] ? cache.formations[0].id : null;
+          }
+          state.selectedDancerId = null;
+          state.editingFormationName = false;
           return render();
         }
         case 'prev-formation':
