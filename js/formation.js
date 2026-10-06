@@ -337,7 +337,7 @@ const Formation = (() => {
     const notes = [];
     cache.dancers.forEach((d) => {
       const pos = getPosition(formation.id, d.id);
-      if (pos.note) notes.push(`${d.name}: ${pos.note}`);
+      if (pos.note) notes.push({ color: d.color, text: `${d.name}: ${pos.note}` });
     });
     const notesHeight = notes.length ? 32 + notes.length * 18 : 0;
     const contentHeight = stageTop + stageH + 40 + notesHeight;
@@ -396,7 +396,15 @@ const Formation = (() => {
       ctx.fillText('Notes', marginX, y);
       y += 18;
       ctx.font = `10px ${PDF_FONT_STACK}`;
-      notes.forEach((n) => { ctx.fillText(`• ${n}`, marginX + 8, y); y += 18; });
+      notes.forEach((note) => {
+        ctx.fillStyle = note.color;
+        ctx.beginPath();
+        ctx.arc(marginX + 12, y - 3, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#141414';
+        ctx.fillText(note.text, marginX + 24, y);
+        y += 18;
+      });
     }
 
     return { canvas, contentHeight };
