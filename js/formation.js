@@ -325,66 +325,102 @@ const Formation = (() => {
 
   // ---------- PDF export ----------
 
+  // jsPDF's built-in fonts (Helvetica/Times/Courier) have no CJK glyphs, so any
+  // Chinese/Japanese/Korean text in a name or note would silently render blank.
+  // We sidestep font embedding by drawing each page on an offscreen canvas (which
+  // uses the browser's own font stack, including whatever CJK font the device has)
+  // and embedding that canvas as an image into the PDF instead of drawing real text.
+  const PDF_FONT_STACK = "'Noto Sans SC','Microsoft YaHei','PingFang SC','Heiti SC',Helvetica,Arial,sans-serif";
+
+  function renderFormationPageCanvas(routine, formation, idx, layout) {
+    const { pageWidth, marginX, stageTop, stageW, stageH } = layout;
+    const notes = [];
+    cache.dancers.forEach((d) => {
+      const pos = getPosition(formation.id, d.id);
+      if (pos.note) notes.push(`${d.name}: ${pos.note}`);
+    });
+    const notesHeight = notes.length ? 32 + notes.length * 18 : 0;
+    const contentHeight = stageTop + stageH + 40 + notesHeight;
+
+    const scale = 2; // render at 2x for crisp text/lines once embedded in the PDF
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(pageWidth * scale);
+    canvas.height = Math.ceil(contentHeight * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, pageWidth, contentHeight);
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.fillStyle = '#7c3aed';
+    ctx.font = `bold 16px ${PDF_FONT_STACK}`;
+    ctx.textAlign = 'left';
+    ctx.fillText(routine.name, marginX, 50);
+
+    ctx.fillStyle = '#141414';
+    ctx.font = `13px ${PDF_FONT_STACK}`;
+    ctx.fillText(formation.label || `Formation ${idx + 1}`, marginX, 74);
+
+    ctx.strokeStyle = '#b4b4b4';
+    ctx.strokeRect(marginX, stageTop, stageW, stageH);
+
+    ctx.fillStyle = '#8c8c8c';
+    ctx.font = `8px ${PDF_FONT_STACK}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('UPSTAGE', pageWidth / 2, stageTop - 6);
+    ctx.fillText('DOWNSTAGE (audience)', pageWidth / 2, stageTop + stageH + 14);
+    ctx.textAlign = 'right';
+    ctx.fillText('STAGE RIGHT', marginX - 4, stageTop + stageH / 2);
+    ctx.textAlign = 'left';
+    ctx.fillText('STAGE LEFT', marginX + stageW + 4, stageTop + stageH / 2);
+
+    cache.dancers.forEach((d) => {
+      const pos = getPosition(formation.id, d.id);
+      const px = marginX + (pos.x / 100) * stageW;
+      const py = stageTop + (pos.y / 100) * stageH;
+      ctx.fillStyle = d.color;
+      ctx.beginPath();
+      ctx.arc(px, py, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#141414';
+      ctx.font = `8px ${PDF_FONT_STACK}`;
+      ctx.textAlign = 'center';
+      ctx.fillText(d.name, px, py + 18);
+    });
+
+    if (notes.length) {
+      let y = stageTop + stageH + 40;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#141414';
+      ctx.font = `bold 10px ${PDF_FONT_STACK}`;
+      ctx.fillText('Notes', marginX, y);
+      y += 18;
+      ctx.font = `10px ${PDF_FONT_STACK}`;
+      notes.forEach((n) => { ctx.fillText(`• ${n}`, marginX + 8, y); y += 18; });
+    }
+
+    return { canvas, contentHeight };
+  }
+
   function generateRoutinePdf(routine) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const marginX = 48;
-    const stageTop = 120;
-    const stageW = pageWidth - marginX * 2;
-    const stageH = 320;
+    const layout = {
+      pageWidth: doc.internal.pageSize.getWidth(),
+      marginX: 48,
+      stageTop: 120,
+      stageW: 0,
+      stageH: 320,
+    };
+    layout.stageW = layout.pageWidth - layout.marginX * 2;
 
     cache.formations.forEach((formation, idx) => {
       if (idx > 0) doc.addPage();
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor(124, 58, 237);
-      doc.text(routine.name, marginX, 50);
-      doc.setTextColor(20, 20, 20);
-      doc.setFontSize(13);
-      doc.text(formation.label || `Formation ${idx + 1}`, marginX, 74);
-
-      doc.setDrawColor(180, 180, 180);
-      doc.rect(marginX, stageTop, stageW, stageH);
-      doc.setFontSize(8);
-      doc.setTextColor(140, 140, 140);
-      doc.text('UPSTAGE', pageWidth / 2, stageTop - 6, { align: 'center' });
-      doc.text('DOWNSTAGE (audience)', pageWidth / 2, stageTop + stageH + 14, { align: 'center' });
-      doc.text('STAGE RIGHT', marginX - 4, stageTop + stageH / 2, { align: 'right' });
-      doc.text('STAGE LEFT', marginX + stageW + 4, stageTop + stageH / 2, { align: 'left' });
-      doc.setTextColor(20, 20, 20);
-
-      const notes = [];
-      cache.dancers.forEach((d) => {
-        const pos = getPosition(formation.id, d.id);
-        const px = marginX + (pos.x / 100) * stageW;
-        const py = stageTop + (pos.y / 100) * stageH;
-        const [r, g, b] = hexToRgb(d.color);
-        doc.setFillColor(r, g, b);
-        doc.circle(px, py, 7, 'F');
-        doc.setFontSize(8);
-        doc.setTextColor(20, 20, 20);
-        doc.text(d.name, px, py + 18, { align: 'center' });
-        if (pos.note) notes.push(`${d.name}: ${pos.note}`);
-      });
-
-      if (notes.length) {
-        let y = stageTop + stageH + 40;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.text('Notes', marginX, y);
-        y += 14;
-        doc.setFont('helvetica', 'normal');
-        notes.forEach((n) => { doc.text(`• ${n}`, marginX + 8, y); y += 14; });
-      }
+      const { canvas, contentHeight } = renderFormationPageCanvas(routine, formation, idx, layout);
+      doc.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, layout.pageWidth, contentHeight);
     });
 
     return doc;
-  }
-
-  function hexToRgb(hex) {
-    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [168, 85, 247];
   }
 
   // ---------- Events ----------
