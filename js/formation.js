@@ -420,7 +420,7 @@ const Formation = (() => {
     const notesHeight = notes.length ? 32 + notes.length * 18 : 0;
     const contentHeight = stageTop + stageH + 40 + offStageHeight + notesHeight;
 
-    const scale = 2; // render at 2x for crisp text/lines once embedded in the PDF
+    const scale = 3; // render at 3x so small text stays crisp (not thin/grey-looking) once embedded in the PDF
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(pageWidth * scale);
     canvas.height = Math.ceil(contentHeight * scale);
@@ -469,8 +469,8 @@ const Formation = (() => {
     let y = stageTop + stageH + 40;
     if (offStageLine) {
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#141414';
-      ctx.font = `10px ${PDF_FONT_STACK}`;
+      ctx.fillStyle = '#000000';
+      ctx.font = `bold 10px ${PDF_FONT_STACK}`;
       ctx.fillText(offStageLine, marginX, y);
       y += offStageHeight;
     }
