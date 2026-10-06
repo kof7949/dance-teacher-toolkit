@@ -469,8 +469,8 @@ const Formation = (() => {
     let y = stageTop + stageH + 40;
     if (offStageLine) {
       ctx.textAlign = 'left';
-      ctx.fillStyle = '#8c8c8c';
-      ctx.font = `italic 9px ${PDF_FONT_STACK}`;
+      ctx.fillStyle = '#141414';
+      ctx.font = `10px ${PDF_FONT_STACK}`;
       ctx.fillText(offStageLine, marginX, y);
       y += offStageHeight;
     }
