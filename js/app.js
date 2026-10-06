@@ -1,4 +1,4 @@
-(async function () {
+async function startApp() {
   await ensureSeedData();
   await Music.init();
   await Progress.init();
@@ -70,4 +70,6 @@
     for (const name of names) await caches.delete(name);
     window.location.reload();
   };
-})();
+}
+
+window.startApp = startApp;

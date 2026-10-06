@@ -11,6 +11,32 @@
 <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
+  <div id="lock-screen" class="lock-screen">
+    <div class="lock-icon">🔒</div>
+    <div class="lock-title">Dance Teacher Toolkit</div>
+    <div class="lock-subtitle">Enter the passcode to continue</div>
+    <div class="lock-dots" id="lock-dots">
+      <span class="lock-dot"></span>
+      <span class="lock-dot"></span>
+      <span class="lock-dot"></span>
+      <span class="lock-dot"></span>
+    </div>
+    <div class="lock-keypad">
+      <button class="lock-key" data-key="1">1</button>
+      <button class="lock-key" data-key="2">2</button>
+      <button class="lock-key" data-key="3">3</button>
+      <button class="lock-key" data-key="4">4</button>
+      <button class="lock-key" data-key="5">5</button>
+      <button class="lock-key" data-key="6">6</button>
+      <button class="lock-key" data-key="7">7</button>
+      <button class="lock-key" data-key="8">8</button>
+      <button class="lock-key" data-key="9">9</button>
+      <span></span>
+      <button class="lock-key" data-key="0">0</button>
+      <button class="lock-key lock-key-back" data-key="back">⌫</button>
+    </div>
+  </div>
+
   <header class="appbar">
     <span class="appbar-title" id="appbar-title">Music &amp; Count</span>
   </header>
@@ -126,6 +152,7 @@
 
   <button id="btn-back-to-top" class="back-to-top" hidden title="Back to top">↑</button>
 
+  <script src="js/lock.js"></script>
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/db.js"></script>
   <script src="js/seed.js"></script>

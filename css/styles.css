@@ -25,6 +25,57 @@ html, body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+.lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px 24px calc(24px + var(--safe-bottom));
+  padding-top: calc(24px + var(--safe-top));
+  background: var(--bg);
+}
+.lock-icon { font-size: 2.2rem; margin-bottom: 4px; }
+.lock-title { font-size: 1.1rem; font-weight: 700; }
+.lock-subtitle { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 18px; }
+.lock-dots { display: flex; gap: 16px; margin-bottom: 28px; }
+.lock-dot {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lock-dot.filled { background: var(--accent); border-color: var(--accent); }
+.lock-dots.lock-error .lock-dot.filled { background: var(--danger); border-color: var(--danger); }
+.lock-dots.lock-error { animation: lock-shake 0.4s; }
+@keyframes lock-shake {
+  10%, 90% { transform: translateX(-6px); }
+  20%, 80% { transform: translateX(5px); }
+  30%, 50%, 70% { transform: translateX(-4px); }
+  40%, 60% { transform: translateX(4px); }
+}
+.lock-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 72px);
+  gap: 16px;
+  justify-content: center;
+}
+.lock-key {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 1.4rem;
+  display: flex; align-items: center; justify-content: center;
+}
+.lock-key:active { background: var(--accent); border-color: var(--accent); }
+.lock-key-back { font-size: 1.1rem; }
+
 body {
   display: flex;
   flex-direction: column;
