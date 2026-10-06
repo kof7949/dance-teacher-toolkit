@@ -375,3 +375,88 @@ main {
   font-size: 0.85rem;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
 }
+
+/* Team Formation */
+.formation-chip { white-space: nowrap; }
+
+.dancer-roster { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.dancer-chip {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 6px 5px 10px; font-size: 0.82rem;
+}
+.dancer-chip-swatch { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.dancer-chip-del { background: none; border: none; color: var(--text-dim); font-size: 0.85rem; padding: 2px 6px; cursor: pointer; }
+
+.color-swatches { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.color-swatch {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 2px solid transparent; padding: 0; cursor: pointer;
+}
+.color-swatch.active { border-color: var(--text); box-shadow: 0 0 0 2px var(--surface); }
+
+.stage-wrap { margin-top: 4px; }
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
+}
+.stage-centerline-v {
+  position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+  background: var(--border);
+}
+.stage-centerline-h {
+  position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+  background: var(--border);
+}
+.stage-label {
+  position: absolute;
+  color: var(--text-dim);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+.stage-label-up { top: 6px; left: 50%; transform: translateX(-50%); }
+.stage-label-down { bottom: 6px; left: 50%; transform: translateX(-50%); }
+.stage-label-sr { top: 50%; left: 8px; transform: translateY(-50%); }
+.stage-label-sl { top: 50%; right: 8px; transform: translateY(-50%); }
+
+.dancer-dot {
+  position: absolute;
+  width: 30px; height: 30px;
+  margin-left: -15px; margin-top: -15px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  transition: left 1.2s ease, top 1.2s ease;
+  touch-action: none;
+  z-index: 2;
+}
+.dancer-dot.dragging {
+  transition: none;
+  cursor: grabbing;
+  z-index: 5;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.55);
+}
+.dancer-dot.selected { border-color: var(--text); box-shadow: 0 0 0 3px var(--accent-2); }
+.dancer-dot-label {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 11, 31, 0.85);
+  color: var(--text);
+  font-size: 0.6rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+}

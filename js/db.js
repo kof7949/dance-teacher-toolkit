@@ -1,6 +1,6 @@
 // Minimal promise-based IndexedDB wrapper. No external deps.
 const DB_NAME = 'dance-toolkit';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise = null;
 
@@ -36,6 +36,21 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains('styles')) {
         db.createObjectStore('styles', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('routines')) {
+        db.createObjectStore('routines', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('dancers')) {
+        const store = db.createObjectStore('dancers', { keyPath: 'id' });
+        store.createIndex('byRoutine', 'routineId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('formations')) {
+        const store = db.createObjectStore('formations', { keyPath: 'id' });
+        store.createIndex('byRoutine', 'routineId', { unique: false });
+      }
+      if (!db.objectStoreNames.contains('positions')) {
+        const store = db.createObjectStore('positions', { keyPath: 'id' });
+        store.createIndex('byFormation', 'formationId', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);

@@ -657,6 +657,10 @@ const Progress = (() => {
           for (const s of data.students) await DB.put('students', s);
           for (const p of (data.progress || [])) await DB.put('progress', p);
           for (const h of (data.history || [])) await DB.put('history', h);
+          for (const r of (data.routines || [])) await DB.put('routines', r);
+          for (const d of (data.dancers || [])) await DB.put('dancers', d);
+          for (const f of (data.formations || [])) await DB.put('formations', f);
+          for (const pos of (data.positions || [])) await DB.put('positions', pos);
           await loadAll();
           state.view = 'list';
           await render();
@@ -830,13 +834,15 @@ const Progress = (() => {
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
-          const [skills, categoryOrderRecords, students, progress, history, styles] = await Promise.all([
+          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions] = await Promise.all([
             DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
+            DB.getAll('routines'), DB.getAll('dancers'), DB.getAll('formations'), DB.getAll('positions'),
           ]);
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 2,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 3,
             exportedAt: new Date().toISOString(),
             skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
+            routines, dancers, formations, positions,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
