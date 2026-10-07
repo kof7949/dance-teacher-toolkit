@@ -13,7 +13,7 @@ const Metronome = (() => {
     { id: 'snare', label: 'Snare' },
   ];
   const MIN_BPM = 10;
-  const MAX_BPM = 300;
+  const MAX_BPM = 500;
   const DEFAULT_BPM = 100;
   const LOOKAHEAD_MS = 25;
   const SCHEDULE_AHEAD_SEC = 0.1;
