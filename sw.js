@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dance-toolkit-v47';
+const CACHE_NAME = 'dance-toolkit-v48';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const ASSETS = [
   './js/music.js',
   './js/progress.js',
   './js/formation.js',
+  './js/metronome.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -32,6 +33,10 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Large media (e.g. the Rhythm Example video) is never precached and would otherwise get
+  // opportunistically cached-then-wiped every time CACHE_NAME bumps (which happens on every
+  // deploy). Let the browser's own HTTP cache handle it instead, independent of app updates.
+  if (event.request.url.includes('/videos/')) return;
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
