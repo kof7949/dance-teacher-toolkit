@@ -202,7 +202,7 @@ const Formation = (() => {
     return `
       <div class="transport-row" style="margin-top:14px;">
         <button class="btn btn-ghost" data-action="prev-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>◀ Prev</button>
-        <button class="btn btn-play" data-action="toggle-play" ${cache.formations.length < 2 ? 'disabled' : ''}>${state.playing ? '⏸' : '▶'}</button>
+        <button class="btn btn-play" id="btn-toggle-play" data-action="toggle-play" ${cache.formations.length < 2 ? 'disabled' : ''}>${state.playing ? '⏸' : '▶'}</button>
         <button class="btn btn-ghost" data-action="next-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>Next ▶</button>
       </div>
     `;
@@ -306,6 +306,11 @@ const Formation = (() => {
   function stopPlay() {
     if (playTimer) { clearInterval(playTimer); playTimer = null; }
     state.playing = false;
+    // Prev/Next call this mid-playback without a full render() afterward (switchToFormation
+    // only patches the stage/strip/notes), so the Play button must be updated directly here
+    // or it would keep showing the pause icon after playback has actually stopped.
+    const btn = document.getElementById('btn-toggle-play');
+    if (btn) btn.textContent = '▶';
   }
 
   async function switchToFormation(formationId) {
