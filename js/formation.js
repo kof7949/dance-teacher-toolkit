@@ -367,11 +367,20 @@ const Formation = (() => {
     switchToFormation(cache.formations[nextIdx].id);
   }
 
+  function playTick() {
+    const idx = cache.formations.findIndex((f) => f.id === state.currentFormationId);
+    if (idx >= cache.formations.length - 1) {
+      stopPlay(); // reached the last formation — stop instead of wrapping back to the first
+      return;
+    }
+    stepFormation(1);
+  }
+
   function togglePlay() {
     if (state.playing) { stopPlay(); render(); return; }
     if (cache.formations.length < 2) return;
     state.playing = true;
-    playTimer = setInterval(() => stepFormation(1), 2200);
+    playTimer = setInterval(playTick, 2200);
     render();
   }
 
