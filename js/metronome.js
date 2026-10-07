@@ -17,14 +17,18 @@ const Metronome = (() => {
   const DEFAULT_BPM = 100;
   const LOOKAHEAD_MS = 25;
   const SCHEDULE_AHEAD_SEC = 0.1;
+  const COUNT_LENGTHS = [4, 8, 16];
+  const DEFAULT_COUNT_LENGTH = 8;
 
   let root;
-  let state = { bpm: DEFAULT_BPM, sound: 'kick', playing: false, videoExpanded: false };
+  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false };
   let audioCtx = null;
   let schedulerTimer = null;
   let nextNoteTime = 0;
+  let beatCounter = 0;
   let wakeLock = null;
   let pulseEl = null;
+  let countEl = null;
 
   function loadSettings() {
     try {
@@ -33,11 +37,14 @@ const Metronome = (() => {
       const saved = JSON.parse(raw);
       if (Number.isFinite(saved.bpm)) state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.bpm));
       if (saved.sound && SOUNDS.some((s) => s.id === saved.sound)) state.sound = saved.sound;
+      if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
     } catch (err) { /* ignore */ }
   }
 
   function saveSettings() {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bpm: state.bpm, sound: state.sound })); } catch (err) { /* ignore */ }
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bpm: state.bpm, sound: state.sound, countLength: state.countLength }));
+    } catch (err) { /* ignore */ }
   }
 
   // ---------- Sound synthesis ----------
@@ -139,10 +146,19 @@ const Metronome = (() => {
     }, delayMs);
   }
 
+  function scheduleCountDisplay(time, count) {
+    const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000);
+    setTimeout(() => {
+      if (countEl) countEl.textContent = count;
+    }, delayMs);
+  }
+
   function scheduler() {
     while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
       playClick(nextNoteTime);
       schedulePulse(nextNoteTime);
+      beatCounter = (beatCounter % state.countLength) + 1;
+      scheduleCountDisplay(nextNoteTime, beatCounter);
       nextNoteTime += 60 / state.bpm;
     }
   }
@@ -166,6 +182,7 @@ const Metronome = (() => {
     ensureAudioContext();
     state.playing = true;
     nextNoteTime = audioCtx.currentTime + 0.05;
+    beatCounter = 0;
     scheduler();
     schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS);
     requestWakeLock();
@@ -177,6 +194,7 @@ const Metronome = (() => {
     if (schedulerTimer) { clearInterval(schedulerTimer); schedulerTimer = null; }
     releaseWakeLock();
     updatePlayButton();
+    if (countEl) countEl.textContent = '–';
   }
 
   function togglePlay() {
@@ -272,6 +290,16 @@ const Metronome = (() => {
           ${SOUNDS.map((s) => `<button class="chip ${state.sound === s.id ? 'active' : ''}" data-sound="${s.id}">${s.label}</button>`).join('')}
         </div>
 
+        <div class="tag-label" style="text-align:center;">Count</div>
+        <div class="tag-buttons" style="justify-content:center;">
+          ${COUNT_LENGTHS.map((n) => `<button class="chip ${state.countLength === n ? 'active' : ''}" data-count-length="${n}">${n}-count</button>`).join('')}
+        </div>
+
+        <div class="metro-count-display">
+          <span class="metro-count-value" id="metro-count-value">–</span>
+          <span class="metro-count-label">/ ${state.countLength}</span>
+        </div>
+
         <div class="metro-transport">
           <div class="metro-pulse" id="metro-pulse"></div>
           <button class="btn btn-play" id="metro-play-btn" data-action="toggle-metro-play">${state.playing ? '⏸' : '▶'}</button>
@@ -288,6 +316,7 @@ const Metronome = (() => {
       </div>
     `;
     pulseEl = document.getElementById('metro-pulse');
+    countEl = document.getElementById('metro-count-value');
     if (state.videoExpanded) setupRhythmVideo();
   }
 
@@ -295,12 +324,19 @@ const Metronome = (() => {
 
   function handleClick(e) {
     const soundId = e.target.closest('[data-sound]')?.dataset.sound;
+    const countLength = e.target.closest('[data-count-length]')?.dataset.countLength;
     const bpmDelta = e.target.closest('[data-bpm-delta]')?.dataset.bpmDelta;
     const rhythmSpeed = e.target.closest('[data-rhythm-speed]')?.dataset.rhythmSpeed;
     const action = e.target.closest('[data-action]')?.dataset.action;
 
     if (soundId) {
       state.sound = soundId;
+      saveSettings();
+      return render();
+    }
+    if (countLength) {
+      state.countLength = Number(countLength);
+      beatCounter = 0;
       saveSettings();
       return render();
     }
