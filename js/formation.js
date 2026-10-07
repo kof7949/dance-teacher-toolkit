@@ -5,7 +5,7 @@ const Formation = (() => {
   const COLORS = ['#a855f7', '#ec4899', '#22d3ee', '#fbbf24', '#34d399', '#f87171', '#60a5fa', '#f472b6', '#fb923c', '#a3e635'];
 
   let root;
-  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false };
+  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false };
   let cache = { routines: [], dancers: [], formations: [], positions: {} }; // positions keyed by formationId -> array
   let dragInfo = null;
   let playTimer = null;
@@ -198,6 +198,44 @@ const Formation = (() => {
     `;
   }
 
+  function transportRowHtml() {
+    return `
+      <div class="transport-row" style="margin-top:14px;">
+        <button class="btn btn-ghost" data-action="prev-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>◀ Prev</button>
+        <button class="btn btn-play" data-action="toggle-play" ${cache.formations.length < 2 ? 'disabled' : ''}>${state.playing ? '⏸' : '▶'}</button>
+        <button class="btn btn-ghost" data-action="next-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>Next ▶</button>
+      </div>
+    `;
+  }
+
+  function formationPanelHtml(formation) {
+    return `
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">Dancers</div>
+        ${dancerRosterHtml()}
+      </div>
+
+      <div class="card">
+        <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
+          <span>Formations</span>
+          <div style="flex:1"></div>
+          ${formation ? '<button class="btn btn-small btn-ghost" data-action="enter-fullscreen" title="Full screen">⛶</button>' : ''}
+        </div>
+        ${formationStripHtml()}
+        <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
+        ${cache.dancers.length === 0
+          ? '<div class="empty-state">Add some dancers above before building a formation.</div>'
+          : (!formation ? '<div class="empty-state">Tap "+ Add formation" to place your first formation.</div>' : stageHtml())}
+        ${formation ? offStageHtml() : ''}
+        ${formation ? `
+          ${transportRowHtml()}
+          <div class="tag-label" style="text-align:center;margin-top:6px;">Tap a dancer dot to add a note for this formation</div>
+          <div id="formation-note-wrap">${selectedDancerNoteHtml()}</div>
+        ` : ''}
+      </div>
+    `;
+  }
+
   function renderEditor() {
     const routine = cache.routines.find((r) => r.id === state.routineId);
     if (!routine) { state.view = 'list'; return renderList(); }
@@ -211,29 +249,9 @@ const Formation = (() => {
       </div>
       <div class="section-title" style="margin-top:0;">${escapeHtml(routine.name)}</div>
 
-      <div class="card">
-        <div class="section-title" style="margin-top:0;">Dancers</div>
-        ${dancerRosterHtml()}
-      </div>
-
-      <div class="card">
-        <div class="section-title" style="margin-top:0;">Formations</div>
-        ${formationStripHtml()}
-        <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
-        ${cache.dancers.length === 0
-          ? '<div class="empty-state">Add some dancers above before building a formation.</div>'
-          : (!formation ? '<div class="empty-state">Tap "+ Add formation" to place your first formation.</div>' : stageHtml())}
-        ${formation ? offStageHtml() : ''}
-        ${formation ? `
-          <div class="transport-row" style="margin-top:14px;">
-            <button class="btn btn-ghost" data-action="prev-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>◀ Prev</button>
-            <button class="btn btn-play" data-action="toggle-play" ${cache.formations.length < 2 ? 'disabled' : ''}>${state.playing ? '⏸' : '▶'}</button>
-            <button class="btn btn-ghost" data-action="next-formation" ${cache.formations.length < 2 ? 'disabled' : ''}>Next ▶</button>
-          </div>
-          <div class="tag-label" style="text-align:center;margin-top:6px;">Tap a dancer dot to add a note for this formation</div>
-          <div id="formation-note-wrap">${selectedDancerNoteHtml()}</div>
-        ` : ''}
-      </div>
+      ${state.fullscreenOpen
+        ? '<div class="card"><div class="empty-state">Formation editor is full screen. Tap ✕ Close to return.</div></div>'
+        : formationPanelHtml(formation)}
 
       ${formation ? `
         <div class="card">
@@ -245,11 +263,37 @@ const Formation = (() => {
     `;
   }
 
+  function renderFullscreenPanelHtml() {
+    const formation = cache.formations.find((f) => f.id === state.currentFormationId);
+    if (!formation) {
+      return '<div class="empty-state">No formation yet — close full screen and tap "+ Add formation".</div>';
+    }
+    return `
+      <div class="fs-stage-col">
+        ${stageHtml()}
+        ${transportRowHtml()}
+      </div>
+      <div class="fs-side-col">
+        ${formationStripHtml()}
+        <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
+        <div class="tag-label">Tap a dancer dot to add a note for this formation</div>
+        <div id="formation-note-wrap">${selectedDancerNoteHtml()}</div>
+        ${offStageHtml()}
+        <div class="section-title" style="margin-top:14px;">Dancers</div>
+        ${dancerRosterHtml()}
+      </div>
+    `;
+  }
+
   async function render() {
     if (state.view === 'editor' && state.routineId) {
       await loadRoutineData(state.routineId);
       await ensurePositionsForFormation(state.currentFormationId);
       root.innerHTML = renderEditor();
+      if (state.fullscreenOpen) {
+        const slot = document.getElementById('formation-fullscreen-slot');
+        if (slot) slot.innerHTML = renderFullscreenPanelHtml();
+      }
     } else {
       state.view = 'list';
       await loadRoutines();
@@ -326,6 +370,55 @@ const Formation = (() => {
     render();
   }
 
+  // ---------- Full screen ----------
+
+  // The installed app's manifest locks orientation to portrait, so a physical phone
+  // rotation alone won't reorient it. Fullscreen + Screen Orientation Lock together
+  // (from a user gesture) is the standard way to get a temporary landscape view despite
+  // that lock — the same technique video players use. Orientation locking isn't
+  // supported everywhere (iOS Safari never supports it, some browsers only allow it in
+  // fullscreen); when it fails we fall back to asking the user to rotate manually rather
+  // than treating it as an error.
+  // Some browsers/embeddings leave requestFullscreen()/orientation.lock() promises
+  // pending indefinitely instead of settling (rather than rejecting outright) when the
+  // feature is unavailable, so a plain try/catch await isn't enough to guarantee we
+  // reach the "ask the user to rotate manually" fallback. A timeout race guards against
+  // that hang in either direction.
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms)),
+    ]);
+  }
+
+  async function enterFullscreen() {
+    state.fullscreenOpen = true;
+    await render();
+    const shell = document.getElementById('formation-fullscreen-shell');
+    const hint = document.getElementById('fs-rotate-hint');
+    if (!shell) return;
+    shell.hidden = false;
+    if (hint) hint.hidden = true;
+    try {
+      await withTimeout(shell.requestFullscreen(), 1500);
+    } catch (err) { /* still shown as an in-page overlay */ }
+    try {
+      if (!screen.orientation || !screen.orientation.lock) throw new Error('unsupported');
+      await withTimeout(screen.orientation.lock('landscape'), 1500);
+    } catch (err) {
+      if (hint) hint.hidden = false;
+    }
+  }
+
+  function exitFullscreen() {
+    state.fullscreenOpen = false;
+    const shell = document.getElementById('formation-fullscreen-shell');
+    if (shell) shell.hidden = true;
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (err) { /* ignore */ }
+    render();
+  }
+
   // ---------- Dragging dots ----------
 
   // Dragging switches the dot to `position: fixed` (viewport coordinates) for the
@@ -334,8 +427,8 @@ const Formation = (() => {
   // dragged between the two differently-laid-out containers. On release we hit-test
   // the pointer's final viewport position against both containers' rects to decide
   // whether the dancer ends up on stage (with new x/y) or off stage.
-  function wireDrag() {
-    root.addEventListener('pointerdown', (e) => {
+  function wireDrag(container) {
+    container.addEventListener('pointerdown', (e) => {
       const dot = e.target.closest('.dancer-dot');
       if (!dot) return;
       e.preventDefault();
@@ -519,10 +612,7 @@ const Formation = (() => {
 
   // ---------- Events ----------
 
-  function wireEvents() {
-    wireDrag();
-
-    root.addEventListener('click', async (e) => {
+  async function handleClick(e) {
       const openRoutineId = e.target.closest('[data-open-routine]')?.dataset.openRoutine;
       const openFormationId = e.target.closest('[data-open-formation]')?.dataset.openFormation;
       const delDancerId = e.target.closest('[data-del-dancer]')?.dataset.delDancer;
@@ -662,6 +752,10 @@ const Formation = (() => {
           return;
         case 'toggle-play':
           return togglePlay();
+        case 'enter-fullscreen':
+          return enterFullscreen();
+        case 'exit-fullscreen':
+          return exitFullscreen();
         case 'export-formation-pdf': {
           const routine = cache.routines.find((r) => r.id === state.routineId);
           const doc = generateRoutinePdf(routine);
@@ -682,20 +776,34 @@ const Formation = (() => {
           return;
         }
       }
-    });
+  }
 
-    root.addEventListener('change', async (e) => {
-      if (e.target.id === 'dancer-note-input') {
-        const dancer = cache.dancers.find((d) => d.id === state.selectedDancerId);
-        if (!dancer || !state.currentFormationId) return;
-        const pos = getPosition(state.currentFormationId, dancer.id);
-        const updated = { ...pos, id: pos.id || DB.uid(), formationId: state.currentFormationId, dancerId: dancer.id, note: e.target.value.trim() };
-        await DB.put('positions', updated);
-        const list = cache.positions[state.currentFormationId] || [];
-        const idx = list.findIndex((p) => p.dancerId === dancer.id);
-        if (idx === -1) list.push(updated); else list[idx] = updated;
-        cache.positions[state.currentFormationId] = list;
-      }
+  async function handleChange(e) {
+    if (e.target.id === 'dancer-note-input') {
+      const dancer = cache.dancers.find((d) => d.id === state.selectedDancerId);
+      if (!dancer || !state.currentFormationId) return;
+      const pos = getPosition(state.currentFormationId, dancer.id);
+      const updated = { ...pos, id: pos.id || DB.uid(), formationId: state.currentFormationId, dancerId: dancer.id, note: e.target.value.trim() };
+      await DB.put('positions', updated);
+      const list = cache.positions[state.currentFormationId] || [];
+      const idx = list.findIndex((p) => p.dancerId === dancer.id);
+      if (idx === -1) list.push(updated); else list[idx] = updated;
+      cache.positions[state.currentFormationId] = list;
+    }
+  }
+
+  function wireEvents() {
+    const shell = document.getElementById('formation-fullscreen-shell');
+    wireDrag(root);
+    root.addEventListener('click', handleClick);
+    root.addEventListener('change', handleChange);
+    if (shell) {
+      wireDrag(shell);
+      shell.addEventListener('click', handleClick);
+      shell.addEventListener('change', handleChange);
+    }
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && state.fullscreenOpen) exitFullscreen();
     });
   }
 

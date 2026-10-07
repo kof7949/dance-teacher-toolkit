@@ -159,6 +159,14 @@
 
   <button id="btn-back-to-top" class="back-to-top" hidden title="Back to top">↑</button>
 
+  <div id="formation-fullscreen-shell" class="formation-fullscreen-shell" hidden>
+    <div class="fs-topbar">
+      <button class="btn btn-small btn-ghost" data-action="exit-fullscreen">✕ Close</button>
+      <span class="fs-rotate-hint" id="fs-rotate-hint" hidden>↻ Rotate your phone to landscape</span>
+    </div>
+    <div id="formation-fullscreen-slot" class="fs-body"></div>
+  </div>
+
   <script src="js/lock.js"></script>
   <script src="js/vendor/jspdf.umd.min.js"></script>
   <script src="js/db.js"></script>
