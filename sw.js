@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dance-toolkit-v51';
+const CACHE_NAME = 'dance-toolkit-v52';
 const ASSETS = [
   './',
   './index.html',
@@ -19,7 +19,14 @@ const ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then((cache) => {
+      // Cache each asset individually rather than cache.addAll(), which aborts the *entire*
+      // precache the moment a single request fails (e.g. one dropped packet on a flaky
+      // connection) -- that would otherwise leave the app with no offline cache at all.
+      return Promise.all(ASSETS.map((url) => cache.add(url).catch((err) => {
+        console.warn('[sw] failed to precache', url, err);
+      })));
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -46,7 +53,16 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
+      }).catch(() => {
+        // Offline and this exact request was never cached -- e.g. a navigation URL that
+        // differs slightly from the precached './' / './index.html' entries (trailing
+        // slash, query string, etc). Fall back to the cached app shell instead of letting
+        // the browser show its own native offline page, so the app still opens offline.
+        if (event.request.mode === 'navigate') {
+          return caches.match('./index.html').then((shell) => shell || cached);
+        }
+        return cached;
+      });
     })
   );
 });
