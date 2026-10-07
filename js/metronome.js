@@ -12,7 +12,7 @@ const Metronome = (() => {
     { id: 'hihat', label: 'Hi-Hat' },
     { id: 'snare', label: 'Snare' },
   ];
-  const MIN_BPM = 40;
+  const MIN_BPM = 10;
   const MAX_BPM = 300;
   const DEFAULT_BPM = 100;
   const LOOKAHEAD_MS = 25;
