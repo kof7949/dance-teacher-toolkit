@@ -510,6 +510,22 @@ main {
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  text-align: center;
+  width: 3.2ch;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.metro-bpm-value:focus {
+  outline: none;
+  border-bottom-color: var(--accent);
+}
+.metro-bpm-value::-webkit-inner-spin-button,
+.metro-bpm-value::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 .metro-bpm-label {
   font-size: 0.8rem;

@@ -13,7 +13,7 @@ const Metronome = (() => {
     { id: 'snare', label: 'Snare' },
   ];
   const MIN_BPM = 40;
-  const MAX_BPM = 220;
+  const MAX_BPM = 300;
   const DEFAULT_BPM = 100;
   const LOOKAHEAD_MS = 25;
   const SCHEDULE_AHEAD_SEC = 0.1;
@@ -199,12 +199,14 @@ const Metronome = (() => {
         <div class="empty-state-small" id="rhythm-video-missing" hidden>Rhythm example video coming soon.</div>
         <div class="speed-row" style="margin-top:10px;">
           <span class="speed-label">Speed: <b id="rhythm-speed-value">100%</b></span>
-          <input type="range" id="rhythm-speed-slider" min="25" max="150" value="100" step="5" />
+          <input type="range" id="rhythm-speed-slider" min="25" max="200" value="100" step="5" />
           <div class="speed-presets">
             <button class="chip rhythm-speed-chip" data-rhythm-speed="50">50%</button>
             <button class="chip rhythm-speed-chip" data-rhythm-speed="75">75%</button>
             <button class="chip rhythm-speed-chip active" data-rhythm-speed="100">100%</button>
             <button class="chip rhythm-speed-chip" data-rhythm-speed="125">125%</button>
+            <button class="chip rhythm-speed-chip" data-rhythm-speed="150">150%</button>
+            <button class="chip rhythm-speed-chip" data-rhythm-speed="200">200%</button>
           </div>
         </div>
       </div>
@@ -251,7 +253,8 @@ const Metronome = (() => {
       <div class="card">
         <div class="section-title" style="margin-top:0;">🥁 Metronome</div>
         <div class="metro-bpm-display">
-          <span class="metro-bpm-value" id="metro-bpm-value">${state.bpm}</span>
+          <input type="number" class="metro-bpm-value" id="metro-bpm-input" inputmode="numeric"
+                 min="${MIN_BPM}" max="${MAX_BPM}" value="${state.bpm}" />
           <span class="metro-bpm-label">BPM</span>
         </div>
         <input type="range" id="metro-bpm-slider" min="${MIN_BPM}" max="${MAX_BPM}" value="${state.bpm}" />
@@ -320,8 +323,17 @@ const Metronome = (() => {
   function handleInput(e) {
     if (e.target.id === 'metro-bpm-slider') {
       state.bpm = Number(e.target.value);
-      const valueEl = document.getElementById('metro-bpm-value');
-      if (valueEl) valueEl.textContent = state.bpm;
+      const input = document.getElementById('metro-bpm-input');
+      if (input) input.value = state.bpm;
+    }
+    if (e.target.id === 'metro-bpm-input') {
+      // Don't clamp or touch the field's own value while the user is still typing
+      // (e.g. typing "30" toward "300" would otherwise get clamped to 40 mid-keystroke).
+      const typed = Number(e.target.value);
+      if (Number.isFinite(typed) && e.target.value.trim() !== '') {
+        const slider = document.getElementById('metro-bpm-slider');
+        if (slider) slider.value = Math.min(MAX_BPM, Math.max(MIN_BPM, typed));
+      }
     }
     if (e.target.id === 'rhythm-speed-slider') {
       applyRhythmSpeed(Number(e.target.value));
@@ -330,6 +342,16 @@ const Metronome = (() => {
 
   function handleChange(e) {
     if (e.target.id === 'metro-bpm-slider') saveSettings();
+    if (e.target.id === 'metro-bpm-input') {
+      const typed = Number(e.target.value);
+      setBpm(Number.isFinite(typed) && e.target.value.trim() !== '' ? typed : state.bpm);
+    }
+  }
+
+  function handleKeydown(e) {
+    if (e.target.id === 'metro-bpm-input' && e.key === 'Enter') {
+      e.target.blur();
+    }
   }
 
   async function init() {
@@ -338,6 +360,7 @@ const Metronome = (() => {
     root.addEventListener('click', handleClick);
     root.addEventListener('input', handleInput);
     root.addEventListener('change', handleChange);
+    root.addEventListener('keydown', handleKeydown);
   }
 
   return { init, onShow: () => render() };
