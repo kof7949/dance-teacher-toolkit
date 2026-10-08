@@ -6,43 +6,11 @@
 // plain setInterval-triggered sound would over a long session.
 const Metronome = (() => {
   const SETTINGS_KEY = 'dance-toolkit-metronome-settings';
-  // Each kit is a genre-flavored set of synthesized sounds (see SOUND_FNS below for the
-  // actual oscillator/noise synthesis per sound) -- picking a kit narrows which sounds show
-  // up, since not every kit has the same roles (e.g. Vogue is just a single accent stab).
-  const KITS = [
-    { id: 'classic', label: 'Classic', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'bass', label: 'Bass' },
-      { id: 'hihat', label: 'Hi-Hat' },
-      { id: 'snare', label: 'Snare' },
-    ] },
-    { id: 'hiphop', label: 'Hip-Hop', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'snare', label: 'Snare' },
-      { id: 'hihat', label: 'Hi-Hat' },
-    ] },
-    { id: 'funk', label: 'Funk', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'snare', label: 'Snare' },
-      { id: 'hihat', label: 'Hi-Hat' },
-    ] },
-    { id: 'disco', label: 'Disco', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'clap', label: 'Clap' },
-      { id: 'hihat', label: 'Hi-Hat' },
-    ] },
-    { id: 'house', label: 'House', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'clap', label: 'Clap' },
-      { id: 'hihat', label: 'Hi-Hat' },
-    ] },
-    { id: 'vogue', label: 'Vogue', sounds: [
-      { id: 'stab', label: 'Stab' },
-    ] },
-    { id: 'popping', label: 'Popping', sounds: [
-      { id: 'kick', label: 'Kick' },
-      { id: 'snare', label: 'Snare' },
-    ] },
+  const SOUNDS = [
+    { id: 'kick', label: 'Kick' },
+    { id: 'bass', label: 'Bass' },
+    { id: 'hihat', label: 'Hi-Hat' },
+    { id: 'snare', label: 'Snare' },
   ];
   const MIN_BPM = 10;
   const MAX_BPM = 500;
@@ -55,7 +23,7 @@ const Metronome = (() => {
   const TAP_HISTORY_SIZE = 8;
 
   let root;
-  let state = { bpm: DEFAULT_BPM, kit: 'classic', sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false };
+  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false };
   let audioCtx = null;
   let schedulerTimer = null;
   let nextNoteTime = 0;
@@ -64,28 +32,20 @@ const Metronome = (() => {
   let pulseEl = null;
   let countEl = null;
 
-  function findKit(kitId) {
-    return KITS.find((k) => k.id === kitId);
-  }
-
   function loadSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (Number.isFinite(saved.bpm)) state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.bpm));
+      if (saved.sound && SOUNDS.some((s) => s.id === saved.sound)) state.sound = saved.sound;
       if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
-      const kit = findKit(saved.kit);
-      if (kit) {
-        state.kit = kit.id;
-        state.sound = kit.sounds.some((s) => s.id === saved.sound) ? saved.sound : kit.sounds[0].id;
-      }
     } catch (err) { /* ignore */ }
   }
 
   function saveSettings() {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bpm: state.bpm, kit: state.kit, sound: state.sound, countLength: state.countLength }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bpm: state.bpm, sound: state.sound, countLength: state.countLength }));
     } catch (err) { /* ignore */ }
   }
 
@@ -168,295 +128,13 @@ const Metronome = (() => {
     osc.stop(time + 0.11);
   }
 
-  // --- Hip-Hop: deep 808-style sub kick (long pitched sustain), a crisper layered snare ---
-  function playHipHopKick(ctx, time) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(130, time);
-    osc.frequency.exponentialRampToValueAtTime(35, time + 0.15);
-    gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.55);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.56);
-  }
-
-  function playHipHopSnare(ctx, time) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(2200, time);
-    filter.Q.value = 1.2;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.9, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
-    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.13);
-
-    const osc = ctx.createOscillator();
-    const oscGain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(200, time);
-    oscGain.gain.setValueAtTime(0.4, time);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
-    osc.connect(oscGain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.09);
-  }
-
-  function playHipHopHiHat(ctx, time) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(9000, time);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.6, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.035);
-    noise.connect(filter).connect(gain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.04);
-  }
-
-  // --- Funk: tight punchy kick, bright rimshot-flavored snare, crisp closed hat ---
-  function playFunkKick(ctx, time) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(180, time);
-    osc.frequency.exponentialRampToValueAtTime(55, time + 0.06);
-    gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.14);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.15);
-  }
-
-  function playFunkSnare(ctx, time) {
-    // Two tight overlapping noise bursts for a crisp funk "pop" -- no tonal oscillator
-    // layer, since a short square-wave blip reads as a generic metronome tick rather than
-    // a snare crack.
-    [{ offset: 0, decay: 0.03, level: 0.7 }, { offset: 0.016, decay: 0.09, level: 1 }].forEach(({ offset, decay, level }) => {
-      const t = time + offset;
-      const noise = ctx.createBufferSource();
-      noise.buffer = createNoiseBuffer(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(3200, t);
-      filter.Q.value = 1.6;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(level, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
-      noise.connect(filter).connect(gain).connect(ctx.destination);
-      noise.start(t);
-      noise.stop(t + decay + 0.01);
-    });
-  }
-
-  function playFunkHiHat(ctx, time) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(8000, time);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
-    noise.connect(filter).connect(gain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.035);
-  }
-
-  // --- Disco / House: four-on-the-floor kick with a click transient, analog-style clap
-  // (three quick overlapping noise bursts -- the classic way to fake a hand clap), shimmer hat ---
-  function playFourOnFloorKick(ctx, time, { startFreq, endFreq, decay }) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(startFreq, time);
-    osc.frequency.exponentialRampToValueAtTime(endFreq, time + decay * 0.4);
-    gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + decay);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + decay + 0.01);
-
-    // Short filtered-noise transient for a natural percussive attack (like a kick beater
-    // thump) instead of a tonal click, which read as a generic metronome tick rather than
-    // part of the kick drum.
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const noiseFilter = ctx.createBiquadFilter();
-    noiseFilter.type = 'lowpass';
-    noiseFilter.frequency.setValueAtTime(900, time);
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.5, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
-    noise.connect(noiseFilter).connect(noiseGain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.025);
-  }
-
-  function playDiscoKick(ctx, time) { playFourOnFloorKick(ctx, time, { startFreq: 160, endFreq: 50, decay: 0.22 }); }
-  function playHouseKick(ctx, time) { playFourOnFloorKick(ctx, time, { startFreq: 145, endFreq: 42, decay: 0.2 }); }
-
-  function playClap(ctx, time, { spread, filterFreq, decay }) {
-    const bursts = 3;
-    for (let i = 0; i < bursts; i++) {
-      const t = time + i * spread;
-      const isLast = i === bursts - 1;
-      const noise = ctx.createBufferSource();
-      noise.buffer = createNoiseBuffer(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(filterFreq, t);
-      filter.Q.value = 1.5;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.7, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + (isLast ? decay : 0.03));
-      noise.connect(filter).connect(gain).connect(ctx.destination);
-      noise.start(t);
-      noise.stop(t + (isLast ? decay + 0.01 : 0.04));
-    }
-  }
-
-  function playDiscoClap(ctx, time) { playClap(ctx, time, { spread: 0.012, filterFreq: 1400, decay: 0.18 }); }
-  function playHouseClap(ctx, time) { playClap(ctx, time, { spread: 0.008, filterFreq: 1700, decay: 0.14 }); }
-
-  function playOpenHiHat(ctx, time, { highpass, decay }) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.setValueAtTime(highpass, time);
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.5, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + decay);
-    noise.connect(filter).connect(gain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + decay + 0.01);
-  }
-
-  function playDiscoHiHat(ctx, time) { playOpenHiHat(ctx, time, { highpass: 6500, decay: 0.12 }); }
-  function playHouseHiHat(ctx, time) { playOpenHiHat(ctx, time, { highpass: 8500, decay: 0.045 }); }
-
-  // --- Vogue: a single sharp, loud accent stab (noise burst + a falling sawtooth for weight) --
-  // the real "Ha" vogue sound everyone knows is a specific copyrighted vocal sample, so this is
-  // a generic accent hit in the same rhythmic role rather than an attempt to copy it.
-  function playVogueStab(ctx, time) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1100, time);
-    filter.Q.value = 1;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(1, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
-    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.11);
-
-    const osc = ctx.createOscillator();
-    const oscGain = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(220, time);
-    osc.frequency.exponentialRampToValueAtTime(90, time + 0.05);
-    oscGain.gain.setValueAtTime(0.6, time);
-    oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
-    osc.connect(oscGain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.1);
-  }
-
-  // --- Popping: an exaggeratedly tight, sharp hit -- street-dance "pop" music favors a
-  // very dry, snappy transient over sustain, since dancers time muscle hits to the attack ---
-  function playPopKick(ctx, time) {
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(200, time);
-    osc.frequency.exponentialRampToValueAtTime(60, time + 0.04);
-    gain.gain.setValueAtTime(1, time);
-    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start(time);
-    osc.stop(time + 0.1);
-
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(1500, time);
-    filter.Q.value = 1;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.55, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
-    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.02);
-  }
-
-  function playPopSnare(ctx, time) {
-    // Louder, brighter double-hit crack (higher bandpass frequency + wider band + more
-    // gain than before), plus a highpass "snap" layer on top for extra sharpness.
-    [{ offset: 0, decay: 0.02, level: 1.3, freq: 4600 }, { offset: 0.008, decay: 0.075, level: 1.6, freq: 4200 }].forEach(({ offset, decay, level, freq }) => {
-      const t = time + offset;
-      const noise = ctx.createBufferSource();
-      noise.buffer = createNoiseBuffer(ctx);
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(freq, t);
-      filter.Q.value = 1;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(level, t);
-      gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
-      noise.connect(filter).connect(gain).connect(ctx.destination);
-      noise.start(t);
-      noise.stop(t + decay + 0.01);
-    });
-
-    const snap = ctx.createBufferSource();
-    snap.buffer = createNoiseBuffer(ctx);
-    const snapFilter = ctx.createBiquadFilter();
-    snapFilter.type = 'highpass';
-    snapFilter.frequency.setValueAtTime(6500, time);
-    const snapGain = ctx.createGain();
-    snapGain.gain.setValueAtTime(1.3, time);
-    snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
-    snap.connect(snapFilter).connect(snapGain).connect(ctx.destination);
-    snap.start(time);
-    snap.stop(time + 0.035);
-  }
-
-  const SOUND_FNS = {
-    'classic:kick': playKick,
-    'classic:bass': playBass,
-    'classic:hihat': playHiHat,
-    'classic:snare': playSnare,
-    'hiphop:kick': playHipHopKick,
-    'hiphop:snare': playHipHopSnare,
-    'hiphop:hihat': playHipHopHiHat,
-    'funk:kick': playFunkKick,
-    'funk:snare': playFunkSnare,
-    'funk:hihat': playFunkHiHat,
-    'disco:kick': playDiscoKick,
-    'disco:clap': playDiscoClap,
-    'disco:hihat': playDiscoHiHat,
-    'house:kick': playHouseKick,
-    'house:clap': playHouseClap,
-    'house:hihat': playHouseHiHat,
-    'vogue:stab': playVogueStab,
-    'popping:kick': playPopKick,
-    'popping:snare': playPopSnare,
-  };
-
   function playClick(time) {
-    const fn = SOUND_FNS[`${state.kit}:${state.sound}`];
-    if (fn) fn(audioCtx, time);
+    switch (state.sound) {
+      case 'kick': return playKick(audioCtx, time);
+      case 'bass': return playBass(audioCtx, time);
+      case 'hihat': return playHiHat(audioCtx, time);
+      case 'snare': return playSnare(audioCtx, time);
+    }
   }
 
   // ---------- Scheduler ----------
@@ -613,7 +291,6 @@ const Metronome = (() => {
   // ---------- Render ----------
 
   function render() {
-    const currentKit = findKit(state.kit) || KITS[0];
     root.innerHTML = `
       <div class="card">
         <div class="section-title" style="margin-top:0;">🥁 Metronome</div>
@@ -637,14 +314,9 @@ const Metronome = (() => {
         </div>
         <div class="tag-label" style="text-align:center;">Tap at least twice in rhythm to set the tempo</div>
 
-        <div class="tag-label" style="text-align:center;">Kit</div>
-        <div class="tag-buttons" style="justify-content:center;">
-          ${KITS.map((k) => `<button class="chip ${state.kit === k.id ? 'active' : ''}" data-kit="${k.id}">${k.label}</button>`).join('')}
-        </div>
-
         <div class="tag-label" style="text-align:center;">Sound</div>
         <div class="tag-buttons" style="justify-content:center;">
-          ${currentKit.sounds.map((s) => `<button class="chip ${state.sound === s.id ? 'active' : ''}" data-sound="${s.id}">${s.label}</button>`).join('')}
+          ${SOUNDS.map((s) => `<button class="chip ${state.sound === s.id ? 'active' : ''}" data-sound="${s.id}">${s.label}</button>`).join('')}
         </div>
 
         <div class="tag-label" style="text-align:center;">Count</div>
@@ -680,21 +352,12 @@ const Metronome = (() => {
   // ---------- Events ----------
 
   function handleClick(e) {
-    const kitId = e.target.closest('[data-kit]')?.dataset.kit;
     const soundId = e.target.closest('[data-sound]')?.dataset.sound;
     const countLength = e.target.closest('[data-count-length]')?.dataset.countLength;
     const bpmDelta = e.target.closest('[data-bpm-delta]')?.dataset.bpmDelta;
     const rhythmSpeed = e.target.closest('[data-rhythm-speed]')?.dataset.rhythmSpeed;
     const action = e.target.closest('[data-action]')?.dataset.action;
 
-    if (kitId) {
-      const kit = findKit(kitId);
-      if (!kit) return;
-      state.kit = kit.id;
-      if (!kit.sounds.some((s) => s.id === state.sound)) state.sound = kit.sounds[0].id;
-      saveSettings();
-      return render();
-    }
     if (soundId) {
       state.sound = soundId;
       saveSettings();
