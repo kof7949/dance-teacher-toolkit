@@ -230,28 +230,24 @@ const Metronome = (() => {
   }
 
   function playFunkSnare(ctx, time) {
-    const noise = ctx.createBufferSource();
-    noise.buffer = createNoiseBuffer(ctx);
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.setValueAtTime(3000, time);
-    filter.Q.value = 2;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(1, time);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.07);
-    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
-    noise.start(time);
-    noise.stop(time + 0.08);
-
-    const click = ctx.createOscillator();
-    const clickGain = ctx.createGain();
-    click.type = 'square';
-    click.frequency.setValueAtTime(900, time);
-    clickGain.gain.setValueAtTime(0.3, time);
-    clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
-    click.connect(clickGain).connect(ctx.destination);
-    click.start(time);
-    click.stop(time + 0.025);
+    // Two tight overlapping noise bursts for a crisp funk "pop" -- no tonal oscillator
+    // layer, since a short square-wave blip reads as a generic metronome tick rather than
+    // a snare crack.
+    [{ offset: 0, decay: 0.03, level: 0.7 }, { offset: 0.016, decay: 0.09, level: 1 }].forEach(({ offset, decay, level }) => {
+      const t = time + offset;
+      const noise = ctx.createBufferSource();
+      noise.buffer = createNoiseBuffer(ctx);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(3200, t);
+      filter.Q.value = 1.6;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(level, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+      noise.connect(filter).connect(gain).connect(ctx.destination);
+      noise.start(t);
+      noise.stop(t + decay + 0.01);
+    });
   }
 
   function playFunkHiHat(ctx, time) {
@@ -282,15 +278,20 @@ const Metronome = (() => {
     osc.start(time);
     osc.stop(time + decay + 0.01);
 
-    const click = ctx.createOscillator();
-    const clickGain = ctx.createGain();
-    click.type = 'square';
-    click.frequency.setValueAtTime(1200, time);
-    clickGain.gain.setValueAtTime(0.25, time);
-    clickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
-    click.connect(clickGain).connect(ctx.destination);
-    click.start(time);
-    click.stop(time + 0.02);
+    // Short filtered-noise transient for a natural percussive attack (like a kick beater
+    // thump) instead of a tonal click, which read as a generic metronome tick rather than
+    // part of the kick drum.
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(ctx);
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'lowpass';
+    noiseFilter.frequency.setValueAtTime(900, time);
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+    noise.connect(noiseFilter).connect(noiseGain).connect(ctx.destination);
+    noise.start(time);
+    noise.stop(time + 0.025);
   }
 
   function playDiscoKick(ctx, time) { playFourOnFloorKick(ctx, time, { startFreq: 160, endFreq: 50, decay: 0.22 }); }
