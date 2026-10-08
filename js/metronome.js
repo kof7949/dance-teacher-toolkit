@@ -401,14 +401,16 @@ const Metronome = (() => {
   }
 
   function playPopSnare(ctx, time) {
-    [{ offset: 0, decay: 0.02, level: 0.8 }, { offset: 0.009, decay: 0.055, level: 1 }].forEach(({ offset, decay, level }) => {
+    // Louder, brighter double-hit crack (higher bandpass frequency + wider band + more
+    // gain than before), plus a highpass "snap" layer on top for extra sharpness.
+    [{ offset: 0, decay: 0.02, level: 1.3, freq: 4600 }, { offset: 0.008, decay: 0.075, level: 1.6, freq: 4200 }].forEach(({ offset, decay, level, freq }) => {
       const t = time + offset;
       const noise = ctx.createBufferSource();
       noise.buffer = createNoiseBuffer(ctx);
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(3800, t);
-      filter.Q.value = 1.4;
+      filter.frequency.setValueAtTime(freq, t);
+      filter.Q.value = 1;
       const gain = ctx.createGain();
       gain.gain.setValueAtTime(level, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
@@ -416,6 +418,18 @@ const Metronome = (() => {
       noise.start(t);
       noise.stop(t + decay + 0.01);
     });
+
+    const snap = ctx.createBufferSource();
+    snap.buffer = createNoiseBuffer(ctx);
+    const snapFilter = ctx.createBiquadFilter();
+    snapFilter.type = 'highpass';
+    snapFilter.frequency.setValueAtTime(6500, time);
+    const snapGain = ctx.createGain();
+    snapGain.gain.setValueAtTime(1.3, time);
+    snapGain.gain.exponentialRampToValueAtTime(0.001, time + 0.03);
+    snap.connect(snapFilter).connect(snapGain).connect(ctx.destination);
+    snap.start(time);
+    snap.stop(time + 0.035);
   }
 
   const SOUND_FNS = {
