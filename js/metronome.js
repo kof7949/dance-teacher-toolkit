@@ -39,6 +39,10 @@ const Metronome = (() => {
     { id: 'vogue', label: 'Vogue', sounds: [
       { id: 'stab', label: 'Stab' },
     ] },
+    { id: 'popping', label: 'Popping', sounds: [
+      { id: 'kick', label: 'Kick' },
+      { id: 'snare', label: 'Snare' },
+    ] },
   ];
   const MIN_BPM = 10;
   const MAX_BPM = 500;
@@ -368,6 +372,52 @@ const Metronome = (() => {
     osc.stop(time + 0.1);
   }
 
+  // --- Popping: an exaggeratedly tight, sharp hit -- street-dance "pop" music favors a
+  // very dry, snappy transient over sustain, since dancers time muscle hits to the attack ---
+  function playPopKick(ctx, time) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, time);
+    osc.frequency.exponentialRampToValueAtTime(60, time + 0.04);
+    gain.gain.setValueAtTime(1, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.1);
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = createNoiseBuffer(ctx);
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1500, time);
+    filter.Q.value = 1;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.55, time);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.015);
+    noise.connect(filter).connect(noiseGain).connect(ctx.destination);
+    noise.start(time);
+    noise.stop(time + 0.02);
+  }
+
+  function playPopSnare(ctx, time) {
+    [{ offset: 0, decay: 0.02, level: 0.8 }, { offset: 0.009, decay: 0.055, level: 1 }].forEach(({ offset, decay, level }) => {
+      const t = time + offset;
+      const noise = ctx.createBufferSource();
+      noise.buffer = createNoiseBuffer(ctx);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(3800, t);
+      filter.Q.value = 1.4;
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(level, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + decay);
+      noise.connect(filter).connect(gain).connect(ctx.destination);
+      noise.start(t);
+      noise.stop(t + decay + 0.01);
+    });
+  }
+
   const SOUND_FNS = {
     'classic:kick': playKick,
     'classic:bass': playBass,
@@ -386,6 +436,8 @@ const Metronome = (() => {
     'house:clap': playHouseClap,
     'house:hihat': playHouseHiHat,
     'vogue:stab': playVogueStab,
+    'popping:kick': playPopKick,
+    'popping:snare': playPopSnare,
   };
 
   function playClick(time) {
