@@ -574,6 +574,27 @@ main {
   color: var(--text-dim);
   margin-left: 4px;
 }
+.metro-tap-row {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 4px;
+}
+.btn-tap {
+  width: 140px;
+  height: 56px;
+  border-radius: 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: var(--surface-2);
+  border: 2px solid var(--accent);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn-tap:active {
+  background: var(--accent);
+  color: #fff;
+}
 
 .formation-fullscreen-shell {
   position: fixed;

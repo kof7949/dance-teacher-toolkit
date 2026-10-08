@@ -47,6 +47,8 @@ const Metronome = (() => {
   const SCHEDULE_AHEAD_SEC = 0.1;
   const COUNT_LENGTHS = [4, 8, 16];
   const DEFAULT_COUNT_LENGTH = 8;
+  const TAP_RESET_MS = 2000;
+  const TAP_HISTORY_SIZE = 8;
 
   let root;
   let state = { bpm: DEFAULT_BPM, kit: 'classic', sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false };
@@ -463,6 +465,28 @@ const Metronome = (() => {
     render();
   }
 
+  // ---------- Tap tempo ----------
+
+  let tapTimestamps = [];
+
+  function handleTapTempo() {
+    const now = performance.now();
+    // A long gap since the last tap means this is a fresh attempt, not a continuation --
+    // start the average over rather than let a stale old tap skew it.
+    if (tapTimestamps.length && now - tapTimestamps[tapTimestamps.length - 1] > TAP_RESET_MS) {
+      tapTimestamps = [];
+    }
+    tapTimestamps.push(now);
+    if (tapTimestamps.length > TAP_HISTORY_SIZE) tapTimestamps.shift();
+
+    if (tapTimestamps.length >= 2) {
+      const intervals = [];
+      for (let i = 1; i < tapTimestamps.length; i++) intervals.push(tapTimestamps[i] - tapTimestamps[i - 1]);
+      const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+      setBpm(Math.round(60000 / avgMs));
+    }
+  }
+
   // ---------- Rhythm Example video ----------
 
   function rhythmExampleBodyHtml() {
@@ -541,6 +565,11 @@ const Metronome = (() => {
             <button class="btn btn-small btn-nudge" data-bpm-delta="5">+5</button>
           </div>
         </div>
+
+        <div class="metro-tap-row">
+          <button class="btn-tap" data-action="tap-tempo">TAP</button>
+        </div>
+        <div class="tag-label" style="text-align:center;">Tap at least twice in rhythm to set the tempo</div>
 
         <div class="tag-label" style="text-align:center;">Kit</div>
         <div class="tag-buttons" style="justify-content:center;">
@@ -621,6 +650,8 @@ const Metronome = (() => {
     switch (action) {
       case 'toggle-metro-play':
         return togglePlay();
+      case 'tap-tempo':
+        return handleTapTempo();
       case 'toggle-rhythm-example':
         state.videoExpanded = !state.videoExpanded;
         return render();
