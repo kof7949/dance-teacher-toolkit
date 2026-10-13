@@ -12,8 +12,12 @@ const Countdown = (() => {
   const DEFAULT_LEADIN_BPM = 130; // ~ matches the default 450ms cadence (60000/450 ≈ 133)
   const MIN_LEADIN_BPM = 60;
   const MAX_LEADIN_BPM = 200;
-  const MIN_LEADIN_RATE = 0.6; // speech rate at MIN_LEADIN_BPM -- noticeably slower
-  const MAX_LEADIN_RATE = 2; // speech rate at MAX_LEADIN_BPM -- noticeably faster
+  // Speech rate at MIN_LEADIN_BPM / MAX_LEADIN_BPM. Floored at a brisk 1.1 rather than slowed
+  // below normal -- a slow chosen tempo still needs each word short enough to finish well
+  // before the next count, not deliberately drawn out (a drawn-out "5" was bleeding into the
+  // next beat and reading as if the count had already moved on).
+  const MIN_LEADIN_RATE = 1.1;
+  const MAX_LEADIN_RATE = 3;
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
