@@ -4,10 +4,11 @@ async function startApp() {
   await Progress.init();
   await Formation.init();
   await Metronome.init();
+  await Countdown.init();
 
   const tabs = Array.from(document.querySelectorAll('.tab'));
   const titleEl = document.getElementById('appbar-title');
-  const titles = { music: 'Music & Count', progress: 'Progress Tracker', formation: 'Team Formation', metronome: 'Metronome' };
+  const titles = { music: 'Music & Count', progress: 'Progress Tracker', formation: 'Team Formation', metronome: 'Metronome', countdown: 'Countdown' };
   const ACTIVE_TAB_KEY = 'dance-toolkit-active-tab';
 
   function activateTab(target) {
@@ -20,6 +21,7 @@ async function startApp() {
     if (target === 'progress') Progress.onShow();
     if (target === 'formation') Formation.onShow();
     if (target === 'metronome') Metronome.onShow();
+    if (target === 'countdown') Countdown.onShow();
   }
 
   tabs.forEach((tab) => {

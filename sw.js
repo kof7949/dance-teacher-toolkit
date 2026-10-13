@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dance-toolkit-v59';
+const CACHE_NAME = 'dance-toolkit-v60';
 const ASSETS = [
   './',
   './index.html',
@@ -12,6 +12,7 @@ const ASSETS = [
   './js/progress.js',
   './js/formation.js',
   './js/metronome.js',
+  './js/countdown.js',
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
