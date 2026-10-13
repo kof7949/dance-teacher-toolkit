@@ -101,18 +101,39 @@ const Countdown = (() => {
     state.leadinCount = 0;
     render();
     requestWakeLock();
+    runLeadinStep(1);
+  }
 
-    for (let i = 1; i <= 8; i++) {
-      const id = setTimeout(() => {
-        state.leadinCount = i;
-        if (i >= 5) speak(String(i));
-        updateLeadinDisplay();
-        if (i === 8) {
-          leadinTimers.push(setTimeout(startRunning, LEADIN_COUNT_MS));
-        }
-      }, i * LEADIN_COUNT_MS);
-      leadinTimers.push(id);
+  // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
+  // spoken, and speech synthesis takes a variable, device-dependent amount of time to
+  // actually finish playing -- advancing those on the same fixed timer let the internal
+  // clock (and the "running" phase it kicks off) get ahead of what the user actually hears,
+  // so the countdown could already be ticking before "8" finished playing. Each spoken count
+  // now waits for its own utterance to genuinely end before moving on.
+  function runLeadinStep(i) {
+    if (state.phase !== 'leadin') return; // cancelled mid-sequence
+    state.leadinCount = i;
+    updateLeadinDisplay();
+
+    if (i < 5) {
+      leadinTimers.push(setTimeout(() => advanceLeadin(i), LEADIN_COUNT_MS));
+      return;
     }
+    if (!('speechSynthesis' in window)) {
+      leadinTimers.push(setTimeout(() => advanceLeadin(i), LEADIN_COUNT_MS));
+      return;
+    }
+    const utter = new SpeechSynthesisUtterance(String(i));
+    utter.rate = 1;
+    utter.onend = () => advanceLeadin(i);
+    utter.onerror = () => advanceLeadin(i); // don't get stuck if speech fails
+    speechSynthesis.speak(utter);
+  }
+
+  function advanceLeadin(i) {
+    if (state.phase !== 'leadin') return;
+    if (i >= 8) startRunning();
+    else runLeadinStep(i + 1);
   }
 
   function startRunning() {
