@@ -137,8 +137,13 @@ const Countdown = (() => {
   // so the countdown could already be ticking before "8" finished playing. By default each
   // spoken count waits for its own utterance to genuinely end before moving on. When a
   // custom lead-in tempo is set, the dancer wants the count to lock to that exact cadence
-  // instead (e.g. to match a song's BPM), so each count advances on the fixed interval and
-  // cuts off the previous word if it's still talking.
+  // instead (e.g. to match a song's BPM), so each count advances on the fixed interval
+  // regardless of speech. Each word is still queued rather than cancelled -- calling
+  // speechSynthesis.cancel() right before speak() on a fast, rapid-fire cadence is what
+  // caused counts to go silent or cut off mid-word (some browsers drop the next utterance
+  // entirely if it's cancelled before it even starts playing). Queuing instead guarantees
+  // every word is spoken in full; at very fast tempos the voice can simply trail a little
+  // behind the beat rather than being lost.
   function runLeadinStep(i) {
     if (state.phase !== 'leadin') return; // cancelled mid-sequence
     state.leadinCount = i;
@@ -154,7 +159,6 @@ const Countdown = (() => {
       return;
     }
     if (state.customLeadin) {
-      cancelSpeech();
       const utter = new SpeechSynthesisUtterance(String(i));
       utter.rate = 1;
       speechSynthesis.speak(utter);
