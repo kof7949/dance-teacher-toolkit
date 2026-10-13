@@ -12,6 +12,8 @@ const Countdown = (() => {
   const DEFAULT_LEADIN_BPM = 130; // ~ matches the default 450ms cadence (60000/450 ≈ 133)
   const MIN_LEADIN_BPM = 60;
   const MAX_LEADIN_BPM = 300;
+  const MIN_LEADIN_RATE = 0.5;
+  const MAX_LEADIN_RATE = 3;
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
@@ -130,6 +132,16 @@ const Countdown = (() => {
     return state.customLeadin ? Math.round(60000 / state.leadinBpm) : LEADIN_COUNT_MS;
   }
 
+  // A faster chosen tempo should audibly speak faster too, not just advance the display
+  // sooner while the voice drones on at normal speed underneath. Scale the utterance's own
+  // playback rate with the BPM (relative to the default cadence's rate of 1), clamped to a
+  // range that stays intelligible.
+  function leadinSpeechRate() {
+    if (!state.customLeadin) return 1;
+    const ratio = state.leadinBpm / DEFAULT_LEADIN_BPM;
+    return Math.max(MIN_LEADIN_RATE, Math.min(MAX_LEADIN_RATE, ratio));
+  }
+
   // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
   // spoken, and speech synthesis takes a variable, device-dependent amount of time to
   // actually finish playing -- advancing those on the same fixed timer let the internal
@@ -138,7 +150,8 @@ const Countdown = (() => {
   // spoken count waits for its own utterance to genuinely end before moving on. When a
   // custom lead-in tempo is set, the dancer wants the count to lock to that exact cadence
   // instead (e.g. to match a song's BPM), so each count advances on the fixed interval
-  // regardless of speech. Each word is still queued rather than cancelled -- calling
+  // regardless of speech, and the speech itself speeds up or slows down with the chosen BPM
+  // (see leadinSpeechRate). Each word is still queued rather than cancelled -- calling
   // speechSynthesis.cancel() right before speak() on a fast, rapid-fire cadence is what
   // caused counts to go silent or cut off mid-word (some browsers drop the next utterance
   // entirely if it's cancelled before it even starts playing). Queuing instead guarantees
@@ -160,7 +173,7 @@ const Countdown = (() => {
     }
     if (state.customLeadin) {
       const utter = new SpeechSynthesisUtterance(String(i));
-      utter.rate = 1;
+      utter.rate = leadinSpeechRate();
       speechSynthesis.speak(utter);
       leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
       return;
