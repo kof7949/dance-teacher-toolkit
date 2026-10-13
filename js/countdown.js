@@ -11,9 +11,7 @@ const Countdown = (() => {
   const LEADIN_COUNT_MS = 450; // default cadence of each of the 8 lead-in counts
   const DEFAULT_LEADIN_BPM = 130; // ~ matches the default 450ms cadence (60000/450 ≈ 133)
   const MIN_LEADIN_BPM = 60;
-  const MAX_LEADIN_BPM = 300;
-  const MIN_LEADIN_RATE = 0.5;
-  const MAX_LEADIN_RATE = 3;
+  const MAX_LEADIN_BPM = 200;
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
@@ -89,6 +87,24 @@ const Countdown = (() => {
     });
   }
 
+  // A precise, audible beat marker for the custom-tempo lead-in. Web Audio's scheduling is
+  // sample-accurate, unlike speech synthesis (whose own timing can't be trusted to lock to a
+  // beat -- see the comment on runLeadinStep), so this tick is what actually lets the dancer
+  // feel the chosen BPM; the spoken numbers are a secondary cue layered on top of it.
+  function playLeadinTick() {
+    const ctx = ensureAudioContext();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1000, t);
+    gain.gain.setValueAtTime(0.25, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.06);
+  }
+
   // ---------- Wake lock ----------
 
   async function requestWakeLock() {
@@ -132,36 +148,29 @@ const Countdown = (() => {
     return state.customLeadin ? Math.round(60000 / state.leadinBpm) : LEADIN_COUNT_MS;
   }
 
-  // A faster chosen tempo should audibly speak faster too, not just advance the display
-  // sooner while the voice drones on at normal speed underneath. Scale the utterance's own
-  // playback rate with the BPM (relative to the default cadence's rate of 1), clamped to a
-  // range that stays intelligible.
-  function leadinSpeechRate() {
-    if (!state.customLeadin) return 1;
-    const ratio = state.leadinBpm / DEFAULT_LEADIN_BPM;
-    return Math.max(MIN_LEADIN_RATE, Math.min(MAX_LEADIN_RATE, ratio));
-  }
-
   // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
   // spoken, and speech synthesis takes a variable, device-dependent amount of time to
   // actually finish playing -- advancing those on the same fixed timer let the internal
   // clock (and the "running" phase it kicks off) get ahead of what the user actually hears,
   // so the countdown could already be ticking before "8" finished playing. By default each
-  // spoken count waits for its own utterance to genuinely end before moving on. When a
-  // custom lead-in tempo is set, the dancer wants the count to lock to that exact cadence
-  // instead (e.g. to match a song's BPM), so each count advances on the fixed interval
-  // regardless of speech, and the speech itself speeds up or slows down with the chosen BPM
-  // (see leadinSpeechRate). Each word is still queued rather than cancelled -- calling
-  // speechSynthesis.cancel() right before speak() on a fast, rapid-fire cadence is what
-  // caused counts to go silent or cut off mid-word (some browsers drop the next utterance
-  // entirely if it's cancelled before it even starts playing). Queuing instead guarantees
-  // every word is spoken in full; at very fast tempos the voice can simply trail a little
-  // behind the beat rather than being lost.
+  // spoken count waits for its own utterance to genuinely end before moving on.
+  //
+  // A custom lead-in tempo needs the dancer to actually *feel* the chosen BPM, which speech
+  // synthesis can't reliably deliver: its playback rate barely changes how long a short word
+  // takes to say, and forcing each word to restart on the beat (speechSynthesis.cancel()
+  // right before speak()) made some browsers silently drop the next word entirely -- even
+  // with a deferred speak() call, words went missing at a plain 300ms cadence (200 BPM).
+  // Web Audio, used for the buzzer below, has none of that unreliability: its scheduling is
+  // sample-accurate. So the custom tempo's beat is carried by a short tick (playLeadinTick)
+  // fired on every one of the 8 counts, while the spoken "5,6,7,8" is simply queued
+  // (never cancelled) alongside it -- guaranteed to finish in full, even if it trails the
+  // tick a little at the faster end of the range.
   function runLeadinStep(i) {
     if (state.phase !== 'leadin') return; // cancelled mid-sequence
     state.leadinCount = i;
     updateLeadinDisplay();
     const intervalMs = leadinIntervalMs();
+    if (state.customLeadin) playLeadinTick();
 
     if (i < 5) {
       leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
@@ -173,8 +182,8 @@ const Countdown = (() => {
     }
     if (state.customLeadin) {
       const utter = new SpeechSynthesisUtterance(String(i));
-      utter.rate = leadinSpeechRate();
-      speechSynthesis.speak(utter);
+      utter.rate = 1;
+      speechSynthesis.speak(utter); // queued, never cancelled -- see comment above
       leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
       return;
     }
