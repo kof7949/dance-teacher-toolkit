@@ -8,12 +8,22 @@ const Countdown = (() => {
   const SETTINGS_KEY = 'dance-toolkit-countdown-settings';
   const PRESETS = [45, 60];
   const DEFAULT_DURATION = 45;
-  const LEADIN_COUNT_MS = 450; // cadence of each of the 8 lead-in counts
+  const LEADIN_COUNT_MS = 450; // default cadence of each of the 8 lead-in counts
+  const DEFAULT_LEADIN_BPM = 130; // ~ matches the default 450ms cadence (60000/450 ≈ 133)
+  const MIN_LEADIN_BPM = 60;
+  const MAX_LEADIN_BPM = 300;
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
   let root;
-  let state = { duration: DEFAULT_DURATION, phase: 'idle', leadinCount: 0, remaining: DEFAULT_DURATION };
+  let state = {
+    duration: DEFAULT_DURATION,
+    phase: 'idle',
+    leadinCount: 0,
+    remaining: DEFAULT_DURATION,
+    customLeadin: false,
+    leadinBpm: DEFAULT_LEADIN_BPM,
+  };
   let audioCtx = null;
   let wakeLock = null;
   let tickTimer = null;
@@ -27,11 +37,19 @@ const Countdown = (() => {
       if (!raw) return;
       const saved = JSON.parse(raw);
       if (Number.isFinite(saved.duration) && saved.duration > 0) state.duration = saved.duration;
+      if (typeof saved.customLeadin === 'boolean') state.customLeadin = saved.customLeadin;
+      if (Number.isFinite(saved.leadinBpm)) state.leadinBpm = clampLeadinBpm(saved.leadinBpm);
     } catch (err) { /* ignore */ }
   }
 
   function saveSettings() {
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ duration: state.duration })); } catch (err) { /* ignore */ }
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        duration: state.duration,
+        customLeadin: state.customLeadin,
+        leadinBpm: state.leadinBpm,
+      }));
+    } catch (err) { /* ignore */ }
   }
 
   // ---------- Speech + buzzer ----------
@@ -104,23 +122,43 @@ const Countdown = (() => {
     runLeadinStep(1);
   }
 
+  function clampLeadinBpm(value) {
+    return Math.max(MIN_LEADIN_BPM, Math.min(MAX_LEADIN_BPM, Math.round(value)));
+  }
+
+  function leadinIntervalMs() {
+    return state.customLeadin ? Math.round(60000 / state.leadinBpm) : LEADIN_COUNT_MS;
+  }
+
   // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
   // spoken, and speech synthesis takes a variable, device-dependent amount of time to
   // actually finish playing -- advancing those on the same fixed timer let the internal
   // clock (and the "running" phase it kicks off) get ahead of what the user actually hears,
-  // so the countdown could already be ticking before "8" finished playing. Each spoken count
-  // now waits for its own utterance to genuinely end before moving on.
+  // so the countdown could already be ticking before "8" finished playing. By default each
+  // spoken count waits for its own utterance to genuinely end before moving on. When a
+  // custom lead-in tempo is set, the dancer wants the count to lock to that exact cadence
+  // instead (e.g. to match a song's BPM), so each count advances on the fixed interval and
+  // cuts off the previous word if it's still talking.
   function runLeadinStep(i) {
     if (state.phase !== 'leadin') return; // cancelled mid-sequence
     state.leadinCount = i;
     updateLeadinDisplay();
+    const intervalMs = leadinIntervalMs();
 
     if (i < 5) {
-      leadinTimers.push(setTimeout(() => advanceLeadin(i), LEADIN_COUNT_MS));
+      leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
       return;
     }
     if (!('speechSynthesis' in window)) {
-      leadinTimers.push(setTimeout(() => advanceLeadin(i), LEADIN_COUNT_MS));
+      leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
+      return;
+    }
+    if (state.customLeadin) {
+      cancelSpeech();
+      const utter = new SpeechSynthesisUtterance(String(i));
+      utter.rate = 1;
+      speechSynthesis.speak(utter);
+      leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
       return;
     }
     const utter = new SpeechSynthesisUtterance(String(i));
@@ -205,6 +243,18 @@ const Countdown = (() => {
     render();
   }
 
+  function setCustomLeadin(enabled) {
+    state.customLeadin = enabled;
+    saveSettings();
+    render();
+  }
+
+  function setLeadinBpm(value) {
+    state.leadinBpm = clampLeadinBpm(value);
+    saveSettings();
+    render();
+  }
+
   function phaseLabel() {
     if (state.phase === 'leadin') return 'Get ready…';
     if (state.phase === 'running') return 'Go!';
@@ -234,6 +284,18 @@ const Countdown = (() => {
             <input type="number" id="countdown-custom-input" placeholder="Custom seconds" min="5" max="600" value="${PRESETS.includes(state.duration) ? '' : state.duration}" />
             <button class="btn btn-small" data-action="set-custom-duration">Set</button>
           </div>
+
+          <div class="tag-label" style="margin-top:14px;">Lead-in count-in</div>
+          <label class="switch">
+            <input type="checkbox" id="countdown-custom-leadin-toggle" ${state.customLeadin ? 'checked' : ''} />
+            <span>Custom lead-in tempo</span>
+          </label>
+          ${state.customLeadin ? `
+            <div class="add-row" style="margin-top:8px;">
+              <input type="number" id="countdown-leadin-bpm-input" min="${MIN_LEADIN_BPM}" max="${MAX_LEADIN_BPM}" value="${state.leadinBpm}" />
+              <span class="tag-label" style="white-space:nowrap;">BPM for "5, 6, 7, 8"</span>
+            </div>
+          ` : ''}
         ` : ''}
 
         <div class="metro-transport">
@@ -288,10 +350,21 @@ const Countdown = (() => {
     }
   }
 
+  function handleChange(e) {
+    if (e.target.id === 'countdown-custom-leadin-toggle') {
+      return setCustomLeadin(e.target.checked);
+    }
+    if (e.target.id === 'countdown-leadin-bpm-input') {
+      const value = Number(e.target.value);
+      if (Number.isFinite(value)) setLeadinBpm(value);
+    }
+  }
+
   async function init() {
     root = document.getElementById('countdown-root');
     loadSettings();
     root.addEventListener('click', handleClick);
+    root.addEventListener('change', handleChange);
   }
 
   return { init, onShow: () => render() };
