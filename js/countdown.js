@@ -174,6 +174,14 @@ const Countdown = (() => {
     startLeadin();
   }
 
+  function startCountdownNow() {
+    cancelSpeech();
+    clearAllTimers();
+    ensureAudioContext();
+    requestWakeLock();
+    startRunning();
+  }
+
   function stopCountdown() {
     cancelSpeech();
     clearAllTimers();
@@ -230,7 +238,10 @@ const Countdown = (() => {
 
         <div class="metro-transport">
           ${state.phase === 'idle'
-            ? '<button class="btn btn-play" data-action="start-countdown">▶</button>'
+            ? `
+              <button class="btn btn-play" data-action="start-countdown" title="Start with the 5,6,7,8 lead-in">▶</button>
+              <button class="btn btn-small" data-action="start-countdown-now" title="Skip the lead-in and start the countdown immediately">Start now</button>
+            `
             : `<button class="btn btn-small btn-danger" data-action="stop-countdown">${state.phase === 'done' ? 'Reset' : 'Stop'}</button>`}
         </div>
       </div>
@@ -270,6 +281,8 @@ const Countdown = (() => {
       }
       case 'start-countdown':
         return startCountdown();
+      case 'start-countdown-now':
+        return startCountdownNow();
       case 'stop-countdown':
         return stopCountdown();
     }
