@@ -16,8 +16,9 @@ const Countdown = (() => {
   // below normal -- a slow chosen tempo still needs each word short enough to finish well
   // before the next count, not deliberately drawn out (a drawn-out "5" was bleeding into the
   // next beat and reading as if the count had already moved on).
-  const MIN_LEADIN_RATE = 1.1;
-  const MAX_LEADIN_RATE = 3;
+  const MIN_LEADIN_RATE = 1.5;
+  const MAX_LEADIN_RATE = 4;
+  const LEADIN_SPEECH_RESTART_DELAY_MS = 30; // gap after cancel() before the next speak()
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
@@ -163,6 +164,22 @@ const Countdown = (() => {
     return MIN_LEADIN_RATE + progress * (MAX_LEADIN_RATE - MIN_LEADIN_RATE);
   }
 
+  // Cuts off whatever's still playing and speaks the given count, so the voice always matches
+  // the number currently on screen instead of trailing behind it. speechSynthesis.cancel()
+  // called in the same tick as the next speak() can make some browsers silently drop that next
+  // utterance (and even leave the engine in a paused state) -- resume() plus a short delay
+  // before speaking again avoids that.
+  function speakLeadinWord(i) {
+    cancelSpeech();
+    const utter = new SpeechSynthesisUtterance(String(i));
+    utter.rate = leadinSpeechRate();
+    leadinTimers.push(setTimeout(() => {
+      if (state.phase !== 'leadin') return;
+      speechSynthesis.resume();
+      speechSynthesis.speak(utter);
+    }, LEADIN_SPEECH_RESTART_DELAY_MS));
+  }
+
   // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
   // spoken, and speech synthesis takes a variable, device-dependent amount of time to
   // actually finish playing -- advancing those on the same fixed timer let the internal
@@ -170,16 +187,16 @@ const Countdown = (() => {
   // so the countdown could already be ticking before "8" finished playing. By default each
   // spoken count waits for its own utterance to genuinely end before moving on.
   //
-  // A custom lead-in tempo needs the dancer to actually *feel* the chosen BPM. Forcing each
-  // word to restart right on the beat (speechSynthesis.cancel() right before speak()) made
-  // some browsers silently drop the next word entirely -- even with a deferred speak() call,
-  // words went missing at a plain 300ms cadence (200 BPM). Web Audio, used for the buzzer
-  // below, has none of that unreliability: its scheduling is sample-accurate. So the beat
-  // itself is carried by a short tick (playLeadinTick) fired on every one of the 8 counts,
-  // and the spoken "5,6,7,8" is simply queued (never cancelled) alongside it -- guaranteed to
-  // finish in full. On top of that, the utterance's own rate is scaled with the BPM
-  // (leadinSpeechRate) so the voice itself audibly speeds up or slows down with the dial,
-  // even though it can still trail the tick a little at the faster end of the range.
+  // A custom lead-in tempo needs the dancer to actually *feel* the chosen BPM, and to hear
+  // the right word the instant the count turns -- not a stale word still finishing from the
+  // beat before. The exact beat itself comes from a short tick (playLeadinTick, Web Audio,
+  // sample-accurate) fired on every one of the 8 counts. The spoken word is cut off and
+  // restarted on every count too (speakLeadinWord), so it's always current; just calling
+  // speechSynthesis.cancel() immediately before speak() made some browsers silently drop the
+  // next word at a fast cadence, so cancel() is followed by resume() and a short delay before
+  // the next speak() -- see speakLeadinWord. The rate is also scaled with the BPM
+  // (leadinSpeechRate) so each word is short enough to usually finish on its own before the
+  // next count, keeping the forced restarts rare rather than the norm.
   function runLeadinStep(i) {
     if (state.phase !== 'leadin') return; // cancelled mid-sequence
     state.leadinCount = i;
@@ -196,9 +213,7 @@ const Countdown = (() => {
       return;
     }
     if (state.customLeadin) {
-      const utter = new SpeechSynthesisUtterance(String(i));
-      utter.rate = leadinSpeechRate();
-      speechSynthesis.speak(utter); // queued, never cancelled -- see comment above
+      speakLeadinWord(i);
       leadinTimers.push(setTimeout(() => advanceLeadin(i), intervalMs));
       return;
     }
