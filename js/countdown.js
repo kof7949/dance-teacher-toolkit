@@ -18,7 +18,6 @@ const Countdown = (() => {
   // next beat and reading as if the count had already moved on).
   const MIN_LEADIN_RATE = 1.5;
   const MAX_LEADIN_RATE = 4;
-  const LEADIN_SPEECH_RESTART_DELAY_MS = 30; // gap after cancel() before the next speak()
   const TICK_MS = 100; // display/threshold-check resolution during the running phase
   const ANNOUNCE_THRESHOLDS = [10, 5, 4, 3, 2, 1];
 
@@ -165,19 +164,17 @@ const Countdown = (() => {
   }
 
   // Cuts off whatever's still playing and speaks the given count, so the voice always matches
-  // the number currently on screen instead of trailing behind it. speechSynthesis.cancel()
-  // called in the same tick as the next speak() can make some browsers silently drop that next
-  // utterance (and even leave the engine in a paused state) -- resume() plus a short delay
-  // before speaking again avoids that.
+  // the number currently on screen instead of trailing behind it, and starts at the same
+  // instant as the beat tick rather than noticeably after it. speechSynthesis.cancel() called
+  // in the same tick as the next speak() can make some browsers silently drop that next
+  // utterance (and even leave the engine in a paused state) -- resume() right after cancel()
+  // avoids that without needing an artificial delay before speaking again.
   function speakLeadinWord(i) {
     cancelSpeech();
+    speechSynthesis.resume();
     const utter = new SpeechSynthesisUtterance(String(i));
     utter.rate = leadinSpeechRate();
-    leadinTimers.push(setTimeout(() => {
-      if (state.phase !== 'leadin') return;
-      speechSynthesis.resume();
-      speechSynthesis.speak(utter);
-    }, LEADIN_SPEECH_RESTART_DELAY_MS));
+    speechSynthesis.speak(utter);
   }
 
   // Counts 1-4 are silent, so they can safely advance on a fixed timer. Counts 5-8 are
