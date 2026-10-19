@@ -638,40 +638,30 @@ main {
   color: #fff;
 }
 
-.groove-grid { display: flex; flex-direction: column; gap: 6px; margin: 10px 0 14px; }
-.groove-row { display: flex; align-items: center; gap: 6px; }
+.groove-grid { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 14px; }
+.groove-row { display: flex; flex-direction: column; gap: 4px; }
 .groove-role-label {
-  flex: 0 0 58px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 4px 6px;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0 2px;
   text-align: left;
   color: var(--text);
 }
-.groove-role-name { font-size: 0.7rem; font-weight: 700; }
-.groove-sample-name {
-  font-size: 0.58rem;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 50px;
-}
+.groove-role-name { font-size: 0.75rem; font-weight: 700; }
+.groove-sample-name { font-size: 0.65rem; color: var(--text-dim); white-space: nowrap; }
 .groove-steps {
   display: grid;
   grid-template-columns: repeat(16, 1fr);
-  gap: 3px;
-  flex: 1;
-  min-width: 0;
+  gap: 2px;
 }
 .groove-step {
   aspect-ratio: 1;
   min-width: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   border: 1px solid var(--border);
   background: var(--surface-2);
   padding: 0;
@@ -679,6 +669,22 @@ main {
 .groove-step.groove-step-beat { border-color: var(--text-dim); }
 .groove-step.active { background: var(--accent); border-color: var(--accent); }
 .groove-step.playhead-col { box-shadow: 0 0 0 2px #fff; }
+
+.groove-preset-chip { display: inline-flex; align-items: center; gap: 3px; }
+.groove-preset-chip .chip-del {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--danger);
+  font-size: 0.65rem;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .formation-fullscreen-shell {
   position: fixed;

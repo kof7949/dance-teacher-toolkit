@@ -459,6 +459,17 @@ const Metronome = (() => {
     render();
   }
 
+  function deleteCustomGroovePreset(id) {
+    if (!confirm('Delete this preset? This can\'t be undone.')) return;
+    customGroovePresets = customGroovePresets.filter((p) => p.id !== id);
+    saveCustomGroovePresets();
+    if (grooveActivePresetId === id) {
+      grooveActivePresetId = null;
+      saveSettings();
+    }
+    render();
+  }
+
   // ---------- Tap tempo ----------
 
   let tapTimestamps = [];
@@ -564,7 +575,12 @@ const Metronome = (() => {
     return `
       <div class="tag-label" style="text-align:center;">Preset</div>
       <div class="tag-buttons" style="justify-content:center;">
-        ${allPresets.map((p) => `<button class="chip ${grooveActivePresetId === p.id ? 'active' : ''}" data-groove-preset="${p.id}">${escapeHtml(p.name)}</button>`).join('')}
+        ${allPresets.map((p) => {
+          const chipBtn = `<button class="chip ${grooveActivePresetId === p.id ? 'active' : ''}" data-groove-preset="${p.id}">${escapeHtml(p.name)}</button>`;
+          const isCustom = customGroovePresets.some((cp) => cp.id === p.id);
+          if (!isCustom) return chipBtn;
+          return `<span class="groove-preset-chip">${chipBtn}<button class="chip-del" data-groove-preset-del="${p.id}" title="Delete preset">✕</button></span>`;
+        }).join('')}
       </div>
 
       <div class="tag-label" style="text-align:center;">Swing</div>
@@ -657,6 +673,7 @@ const Metronome = (() => {
     const rhythmSpeed = e.target.closest('[data-rhythm-speed]')?.dataset.rhythmSpeed;
     const metroMode = e.target.closest('[data-metro-mode]')?.dataset.metroMode;
     const groovePreset = e.target.closest('[data-groove-preset]')?.dataset.groovePreset;
+    const groovePresetDel = e.target.closest('[data-groove-preset-del]')?.dataset.groovePresetDel;
     const grooveSwing = e.target.closest('[data-groove-swing]')?.dataset.grooveSwing;
     const grooveStep = e.target.closest('[data-groove-step]')?.dataset.grooveStep;
     const grooveCycleSample = e.target.closest('[data-groove-cycle-sample]')?.dataset.grooveCycleSample;
@@ -681,6 +698,9 @@ const Metronome = (() => {
     }
     if (metroMode) {
       return setMetroMode(metroMode);
+    }
+    if (groovePresetDel) {
+      return deleteCustomGroovePreset(groovePresetDel);
     }
     if (groovePreset) {
       return loadGroovePreset(groovePreset);
