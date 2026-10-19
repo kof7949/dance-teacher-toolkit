@@ -22,8 +22,90 @@ const Metronome = (() => {
   const TAP_RESET_MS = 2000;
   const TAP_HISTORY_SIZE = 8;
 
+  // ---------- Groove Lab ----------
+  // A second metronome mode (opt-in, Classic stays the default) that plays real curated or
+  // user-built 16-step drum patterns instead of a single click, using short licensed CC0
+  // samples fetched from their original public source repos (see audio/groove/SOURCES.txt) --
+  // not extracted from any other app.
+  const GROOVE_CUSTOM_PRESETS_KEY = 'dance-toolkit-groove-custom-presets';
+  const STEPS_PER_BAR = 16;
+  const SWING_OPTIONS = [0, 0.08, 0.16, 0.25];
+  const GROOVE_ROLES = ['kick', 'snare', 'hat', 'fx'];
+  const GROOVE_ROLE_LABELS = { kick: 'Kick', snare: 'Snare', hat: 'Hat', fx: 'FX' };
+  const GROOVE_SAMPLES = [
+    { id: 'kick-vintage', role: 'kick', label: 'Vintage', url: 'audio/groove/kick-vintage.wav' },
+    { id: 'kick-damped', role: 'kick', label: 'Damped', url: 'audio/groove/kick-damped.wav' },
+    { id: 'snare-dusty', role: 'snare', label: 'Dusty', url: 'audio/groove/snare-dusty.wav' },
+    { id: 'snare-handclap', role: 'snare', label: 'Handclap', url: 'audio/groove/snare-handclap.wav' },
+    { id: 'snare-tamb', role: 'snare', label: 'Tambo', url: 'audio/groove/snare-tamb.wav' },
+    { id: 'hat-vintage', role: 'hat', label: 'Vintage', url: 'audio/groove/hat-vintage.wav' },
+    { id: 'hat-brush', role: 'hat', label: 'Brush', url: 'audio/groove/hat-brush.wav' },
+    { id: 'fx-tambourine', role: 'fx', label: 'Tambourine', url: 'audio/groove/fx-tambourine.wav' },
+    { id: 'fx-cabasa', role: 'fx', label: 'Cabasa', url: 'audio/groove/fx-cabasa.wav' },
+    { id: 'fx-conga', role: 'fx', label: 'Conga', url: 'audio/groove/fx-conga.wav' },
+    { id: 'fx-claves', role: 'fx', label: 'Claves', url: 'audio/groove/fx-claves.wav' },
+    { id: 'fx-snap', role: 'fx', label: 'Snap', url: 'audio/groove/fx-snap.wav' },
+  ];
+  const ROLE_SAMPLE_OPTIONS = {
+    kick: ['kick-vintage', 'kick-damped'],
+    snare: ['snare-dusty', 'snare-handclap', 'snare-tamb'],
+    hat: ['hat-vintage', 'hat-brush'],
+    fx: ['fx-tambourine', 'fx-cabasa', 'fx-conga', 'fx-claves', 'fx-snap'],
+  };
+
+  function emptySteps() { return new Array(STEPS_PER_BAR).fill(false); }
+  function stepsAt(indices) { const s = emptySteps(); indices.forEach((i) => { s[i] = true; }); return s; }
+
+  // Original patterns authored for this app -- standard genre rhythm idioms (four-on-the-floor,
+  // boom-bap, etc.) are generic musical conventions, not copied step data from any other app.
+  const BUILTIN_GROOVE_PRESETS = [
+    {
+      id: 'house-four-floor', name: 'Four on the Floor', genre: 'House', bpm: 124, swing: 0,
+      tracks: [
+        { role: 'kick', sampleId: 'kick-vintage', steps: stepsAt([0, 4, 8, 12]) },
+        { role: 'snare', sampleId: 'snare-handclap', steps: stepsAt([4, 12]) },
+        { role: 'hat', sampleId: 'hat-vintage', steps: stepsAt([2, 6, 10, 14]) },
+        { role: 'fx', sampleId: 'fx-claves', steps: emptySteps() },
+      ],
+    },
+    {
+      id: 'hiphop-boom-bap', name: 'Boom Bap', genre: 'Hip-Hop', bpm: 90, swing: 0.08,
+      tracks: [
+        { role: 'kick', sampleId: 'kick-damped', steps: stepsAt([0, 6, 10]) },
+        { role: 'snare', sampleId: 'snare-dusty', steps: stepsAt([4, 12]) },
+        { role: 'hat', sampleId: 'hat-brush', steps: stepsAt([0, 2, 4, 6, 8, 10, 12, 14]) },
+        { role: 'fx', sampleId: 'fx-snap', steps: emptySteps() },
+      ],
+    },
+    {
+      id: 'funk-pocket', name: 'Funk Pocket', genre: 'Funk', bpm: 104, swing: 0.16,
+      tracks: [
+        { role: 'kick', sampleId: 'kick-vintage', steps: stepsAt([0, 3, 8, 11]) },
+        { role: 'snare', sampleId: 'snare-tamb', steps: stepsAt([4, 12, 14]) },
+        { role: 'hat', sampleId: 'hat-vintage', steps: stepsAt([0, 2, 4, 6, 8, 10, 12, 14]) },
+        { role: 'fx', sampleId: 'fx-cabasa', steps: stepsAt([6]) },
+      ],
+    },
+    {
+      id: 'garage-skip', name: 'Garage Skip', genre: 'UK Garage', bpm: 130, swing: 0.2,
+      tracks: [
+        { role: 'kick', sampleId: 'kick-damped', steps: stepsAt([0, 7, 10]) },
+        { role: 'snare', sampleId: 'snare-handclap', steps: stepsAt([4, 12]) },
+        { role: 'hat', sampleId: 'hat-brush', steps: stepsAt([2, 6, 10, 14]) },
+        { role: 'fx', sampleId: 'fx-conga', steps: stepsAt([9]) },
+      ],
+    },
+  ];
+
+  function cloneGroovePattern(p) {
+    return {
+      id: p.id, name: p.name, genre: p.genre, bpm: p.bpm, swing: p.swing,
+      tracks: p.tracks.map((t) => ({ role: t.role, sampleId: t.sampleId, steps: t.steps.slice() })),
+    };
+  }
+
   let root;
-  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false };
+  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false, mode: 'classic' };
   let audioCtx = null;
   let schedulerTimer = null;
   let nextNoteTime = 0;
@@ -31,22 +113,51 @@ const Metronome = (() => {
   let wakeLock = null;
   let pulseEl = null;
   let countEl = null;
+  let groovePattern = cloneGroovePattern(BUILTIN_GROOVE_PRESETS[0]);
+  let grooveActivePresetId = BUILTIN_GROOVE_PRESETS[0].id;
+  let customGroovePresets = [];
+  let grooveStepIndex = 0;
+  let grooveBuffers = {};
+  let grooveBuffersLoading = null;
 
   function loadSettings() {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
-      if (!raw) return;
-      const saved = JSON.parse(raw);
-      if (Number.isFinite(saved.bpm)) state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.bpm));
-      if (saved.sound && SOUNDS.some((s) => s.id === saved.sound)) state.sound = saved.sound;
-      if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
+      if (raw) {
+        const saved = JSON.parse(raw);
+        if (Number.isFinite(saved.bpm)) state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.bpm));
+        if (saved.sound && SOUNDS.some((s) => s.id === saved.sound)) state.sound = saved.sound;
+        if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
+        if (saved.mode === 'groove' || saved.mode === 'classic') state.mode = saved.mode;
+        if (saved.groovePattern && Array.isArray(saved.groovePattern.tracks)) {
+          groovePattern = saved.groovePattern;
+          grooveActivePresetId = saved.grooveActivePresetId || null;
+        }
+      }
+    } catch (err) { /* ignore */ }
+    try {
+      const rawPresets = localStorage.getItem(GROOVE_CUSTOM_PRESETS_KEY);
+      if (rawPresets) customGroovePresets = JSON.parse(rawPresets);
     } catch (err) { /* ignore */ }
   }
 
   function saveSettings() {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ bpm: state.bpm, sound: state.sound, countLength: state.countLength }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+        bpm: state.bpm, sound: state.sound, countLength: state.countLength,
+        mode: state.mode, groovePattern, grooveActivePresetId,
+      }));
     } catch (err) { /* ignore */ }
+  }
+
+  function saveCustomGroovePresets() {
+    try { localStorage.setItem(GROOVE_CUSTOM_PRESETS_KEY, JSON.stringify(customGroovePresets)); } catch (err) { /* ignore */ }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
   }
 
   // ---------- Sound synthesis ----------
@@ -137,6 +248,31 @@ const Metronome = (() => {
     }
   }
 
+  // ---------- Groove sample playback ----------
+
+  function ensureGrooveBuffersLoaded() {
+    if (grooveBuffersLoading) return grooveBuffersLoading;
+    const ctx = ensureAudioContext();
+    grooveBuffersLoading = Promise.all(GROOVE_SAMPLES.map(async (s) => {
+      if (grooveBuffers[s.id]) return;
+      const res = await fetch(s.url);
+      const arrayBuffer = await res.arrayBuffer();
+      grooveBuffers[s.id] = await ctx.decodeAudioData(arrayBuffer);
+    }));
+    return grooveBuffersLoading;
+  }
+
+  function playGrooveSample(sampleId, time) {
+    const buffer = grooveBuffers[sampleId];
+    if (!buffer) return;
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.9, time);
+    src.connect(gain).connect(audioCtx.destination);
+    src.start(time);
+  }
+
   // ---------- Scheduler ----------
 
   function schedulePulse(time) {
@@ -156,12 +292,32 @@ const Metronome = (() => {
   }
 
   function scheduler() {
+    if (state.mode === 'groove') return schedulerGroove();
     while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
       playClick(nextNoteTime);
       schedulePulse(nextNoteTime);
       beatCounter = (beatCounter % state.countLength) + 1;
       scheduleCountDisplay(nextNoteTime, beatCounter);
       nextNoteTime += 60 / state.bpm;
+    }
+  }
+
+  // A 16th-note step sequencer instead of one sound per beat: each step looks up which
+  // role-tracks are active in the current pattern and fires each one's sample. Swing keeps
+  // each on/off-beat 16th pair summing to exactly 2 * interval (so tempo never drifts) while
+  // delaying every off-beat step by the swing fraction, the standard shuffle technique.
+  function schedulerGroove() {
+    const interval = 60 / state.bpm / 4;
+    while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
+      const idx = grooveStepIndex % STEPS_PER_BAR;
+      for (const track of groovePattern.tracks) {
+        if (track.steps[idx]) playGrooveSample(track.sampleId, nextNoteTime);
+      }
+      if (idx % 4 === 0) schedulePulse(nextNoteTime);
+      scheduleCountDisplay(nextNoteTime, Math.floor(idx / 4) + 1);
+      const swing = groovePattern.swing || 0;
+      nextNoteTime += (idx % 2 === 0) ? interval * (1 + swing) : interval * (1 - swing);
+      grooveStepIndex++;
     }
   }
 
@@ -180,11 +336,16 @@ const Metronome = (() => {
     if (btn) btn.textContent = state.playing ? '⏸' : '▶';
   }
 
-  function startPlaying() {
+  async function startPlaying() {
     ensureAudioContext();
+    if (state.mode === 'groove') {
+      await ensureGrooveBuffersLoaded();
+      grooveStepIndex = 0;
+    } else {
+      beatCounter = 0;
+    }
     state.playing = true;
     nextNoteTime = audioCtx.currentTime + 0.05;
-    beatCounter = 0;
     scheduler();
     schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS);
     requestWakeLock();
@@ -205,6 +366,78 @@ const Metronome = (() => {
 
   function setBpm(value) {
     state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, value));
+    saveSettings();
+    render();
+  }
+
+  // ---------- Groove Lab editing ----------
+
+  function setMetroMode(mode) {
+    if (state.mode === mode) return;
+    if (state.playing) stopPlaying();
+    state.mode = mode;
+    saveSettings();
+    render();
+  }
+
+  function toggleGrooveStep(role, index) {
+    const track = groovePattern.tracks.find((t) => t.role === role);
+    if (!track) return;
+    track.steps[index] = !track.steps[index];
+    grooveActivePresetId = null;
+    saveSettings();
+    render();
+  }
+
+  function cycleGrooveSample(role) {
+    const track = groovePattern.tracks.find((t) => t.role === role);
+    if (!track) return;
+    const options = ROLE_SAMPLE_OPTIONS[role];
+    const idx = options.indexOf(track.sampleId);
+    track.sampleId = options[(idx + 1) % options.length];
+    grooveActivePresetId = null;
+    saveSettings();
+    render();
+  }
+
+  function loadGroovePreset(id) {
+    const preset = BUILTIN_GROOVE_PRESETS.find((p) => p.id === id) || customGroovePresets.find((p) => p.id === id);
+    if (!preset) return;
+    groovePattern = cloneGroovePattern(preset);
+    grooveActivePresetId = id;
+    state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, preset.bpm));
+    saveSettings();
+    render();
+  }
+
+  function clearGroovePattern() {
+    groovePattern.tracks.forEach((t) => { t.steps = emptySteps(); });
+    grooveActivePresetId = null;
+    saveSettings();
+    render();
+  }
+
+  function setGrooveSwing(value) {
+    groovePattern.swing = value;
+    grooveActivePresetId = null;
+    saveSettings();
+    render();
+  }
+
+  function saveCurrentAsGroovePreset() {
+    const name = prompt('Name this pattern:', 'My Pattern');
+    if (!name || !name.trim()) return;
+    const preset = {
+      id: 'custom-' + DB.uid(),
+      name: name.trim(),
+      genre: 'Custom',
+      bpm: state.bpm,
+      swing: groovePattern.swing || 0,
+      tracks: groovePattern.tracks.map((t) => ({ role: t.role, sampleId: t.sampleId, steps: t.steps.slice() })),
+    };
+    customGroovePresets.push(preset);
+    saveCustomGroovePresets();
+    grooveActivePresetId = preset.id;
     saveSettings();
     render();
   }
@@ -290,6 +523,63 @@ const Metronome = (() => {
 
   // ---------- Render ----------
 
+  function classicSectionHtml() {
+    return `
+      <div class="metro-tap-row">
+        <button class="btn-tap" data-action="tap-tempo">TAP</button>
+      </div>
+      <div class="tag-label" style="text-align:center;">Tap at least twice in rhythm to set the tempo</div>
+
+      <div class="tag-label" style="text-align:center;">Sound</div>
+      <div class="tag-buttons" style="justify-content:center;">
+        ${SOUNDS.map((s) => `<button class="chip ${state.sound === s.id ? 'active' : ''}" data-sound="${s.id}">${s.label}</button>`).join('')}
+      </div>
+
+      <div class="tag-label" style="text-align:center;">Count</div>
+      <div class="tag-buttons" style="justify-content:center;">
+        ${COUNT_LENGTHS.map((n) => `<button class="chip ${state.countLength === n ? 'active' : ''}" data-count-length="${n}">${n}-count</button>`).join('')}
+      </div>
+    `;
+  }
+
+  function grooveSectionHtml() {
+    const allPresets = [...BUILTIN_GROOVE_PRESETS, ...customGroovePresets];
+    return `
+      <div class="tag-label" style="text-align:center;">Preset</div>
+      <div class="tag-buttons" style="justify-content:center;">
+        ${allPresets.map((p) => `<button class="chip ${grooveActivePresetId === p.id ? 'active' : ''}" data-groove-preset="${p.id}">${escapeHtml(p.name)}</button>`).join('')}
+      </div>
+
+      <div class="tag-label" style="text-align:center;">Swing</div>
+      <div class="tag-buttons" style="justify-content:center;">
+        ${SWING_OPTIONS.map((s) => `<button class="chip ${Math.abs((groovePattern.swing || 0) - s) < 0.001 ? 'active' : ''}" data-groove-swing="${s}">${Math.round(s * 100)}%</button>`).join('')}
+      </div>
+
+      <div class="groove-grid">
+        ${GROOVE_ROLES.map((role) => {
+          const track = groovePattern.tracks.find((t) => t.role === role);
+          const sampleLabel = GROOVE_SAMPLES.find((s) => s.id === track.sampleId)?.label || '';
+          return `
+            <div class="groove-row">
+              <button class="groove-role-label" data-groove-cycle-sample="${role}">
+                <span class="groove-role-name">${GROOVE_ROLE_LABELS[role]}</span>
+                <span class="groove-sample-name">${escapeHtml(sampleLabel)}</span>
+              </button>
+              <div class="groove-steps">
+                ${track.steps.map((on, i) => `<button class="groove-step ${on ? 'active' : ''} ${i % 4 === 0 ? 'groove-step-beat' : ''}" data-groove-step="${role}:${i}"></button>`).join('')}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="metro-transport" style="margin-top: 4px; gap: 10px;">
+        <button class="btn btn-small" data-action="clear-groove-pattern">Clear</button>
+        <button class="btn btn-small" data-action="save-groove-preset">Save as preset</button>
+      </div>
+    `;
+  }
+
   function render() {
     root.innerHTML = `
       <div class="card">
@@ -309,24 +599,16 @@ const Metronome = (() => {
           </div>
         </div>
 
-        <div class="metro-tap-row">
-          <button class="btn-tap" data-action="tap-tempo">TAP</button>
-        </div>
-        <div class="tag-label" style="text-align:center;">Tap at least twice in rhythm to set the tempo</div>
-
-        <div class="tag-label" style="text-align:center;">Sound</div>
-        <div class="tag-buttons" style="justify-content:center;">
-          ${SOUNDS.map((s) => `<button class="chip ${state.sound === s.id ? 'active' : ''}" data-sound="${s.id}">${s.label}</button>`).join('')}
+        <div class="tag-buttons" style="justify-content:center; margin: 14px 0 4px;">
+          <button class="chip ${state.mode === 'classic' ? 'active' : ''}" data-metro-mode="classic">Classic</button>
+          <button class="chip ${state.mode === 'groove' ? 'active' : ''}" data-metro-mode="groove">Groove</button>
         </div>
 
-        <div class="tag-label" style="text-align:center;">Count</div>
-        <div class="tag-buttons" style="justify-content:center;">
-          ${COUNT_LENGTHS.map((n) => `<button class="chip ${state.countLength === n ? 'active' : ''}" data-count-length="${n}">${n}-count</button>`).join('')}
-        </div>
+        ${state.mode === 'groove' ? grooveSectionHtml() : classicSectionHtml()}
 
         <div class="metro-count-display">
           <span class="metro-count-value" id="metro-count-value">–</span>
-          <span class="metro-count-label">/ ${state.countLength}</span>
+          <span class="metro-count-label">/ ${state.mode === 'groove' ? 4 : state.countLength}</span>
         </div>
 
         <div class="metro-transport">
@@ -356,6 +638,11 @@ const Metronome = (() => {
     const countLength = e.target.closest('[data-count-length]')?.dataset.countLength;
     const bpmDelta = e.target.closest('[data-bpm-delta]')?.dataset.bpmDelta;
     const rhythmSpeed = e.target.closest('[data-rhythm-speed]')?.dataset.rhythmSpeed;
+    const metroMode = e.target.closest('[data-metro-mode]')?.dataset.metroMode;
+    const groovePreset = e.target.closest('[data-groove-preset]')?.dataset.groovePreset;
+    const grooveSwing = e.target.closest('[data-groove-swing]')?.dataset.grooveSwing;
+    const grooveStep = e.target.closest('[data-groove-step]')?.dataset.grooveStep;
+    const grooveCycleSample = e.target.closest('[data-groove-cycle-sample]')?.dataset.grooveCycleSample;
     const action = e.target.closest('[data-action]')?.dataset.action;
 
     if (soundId) {
@@ -375,6 +662,22 @@ const Metronome = (() => {
     if (rhythmSpeed) {
       return setRhythmSpeed(Number(rhythmSpeed));
     }
+    if (metroMode) {
+      return setMetroMode(metroMode);
+    }
+    if (groovePreset) {
+      return loadGroovePreset(groovePreset);
+    }
+    if (grooveSwing != null) {
+      return setGrooveSwing(Number(grooveSwing));
+    }
+    if (grooveStep) {
+      const [role, idx] = grooveStep.split(':');
+      return toggleGrooveStep(role, Number(idx));
+    }
+    if (grooveCycleSample) {
+      return cycleGrooveSample(grooveCycleSample);
+    }
 
     switch (action) {
       case 'toggle-metro-play':
@@ -384,6 +687,10 @@ const Metronome = (() => {
       case 'toggle-rhythm-example':
         state.videoExpanded = !state.videoExpanded;
         return render();
+      case 'clear-groove-pattern':
+        return clearGroovePattern();
+      case 'save-groove-preset':
+        return saveCurrentAsGroovePreset();
     }
   }
 

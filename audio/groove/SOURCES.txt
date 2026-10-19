@@ -1,0 +1,16 @@
+Groove Lab drum samples -- all CC0-1.0 (public domain dedication), no attribution required.
+Fetched directly from each library's original public repository and reprocessed here
+(trimmed, high-pass filtered, loudness-normalized) rather than extracted from any other app.
+
+kick-vintage.wav    sfzinstruments/karoryfer.gogodze-phu-vol-ii  Samples/kick_mic/ks_vl4_rr1.wav
+kick-damped.wav     sfzinstruments/karoryfer.big-rusty-drums     Samples/kick_24/kick/kick/k_vl4_rr1.flac
+snare-dusty.wav     sfzinstruments/karoryfer.gogodze-phu-vol-ii  Samples/snare_mic/sc_vl4_rr1.wav
+snare-handclap.wav  sgossner/VCSL                                Idiophones/Struck Idiophones/Claps/SoloClap_vl3.wav
+snare-tamb.wav      sfzinstruments/karoryfer.big-rusty-drums     Samples/snare_14/tcenter/top/sn_tall_vl4_rr1.flac
+hat-vintage.wav     sfzinstruments/karoryfer.gogodze-phu-vol-ii  Samples/oh_mic/hc_vl3_rr1.wav
+hat-brush.wav       sfzinstruments/karoryfer.big-rusty-drums     Samples/hihat_14/tc_brush/cl/ht_tc_b_vl4_rr1.flac
+fx-tambourine.wav   sgossner/VCSL                                Idiophones/Struck Idiophones/Tambourine 1/Tamb1_Hit_v2_rr1_Mid.wav
+fx-cabasa.wav       sgossner/VCSL                                Idiophones/Struck Idiophones/Cabasa/Cabasa1_Hit_rr1_Mid.wav
+fx-conga.wav        sgossner/VCSL                                Membranophones/Struck Membranophones/Conga/Conga_HitN_v2_rr1_Sum.wav
+fx-claves.wav       sgossner/VCSL                                Idiophones/Struck Idiophones/Claves/Claves1_Hit_v2_rr1_Mid.wav
+fx-snap.wav         chaosportal / Freesound (sound 137105)       https://freesound.org/people/chaosportal/sounds/137105/

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dance-toolkit-v72';
+const CACHE_NAME = 'dance-toolkit-v73';
 const ASSETS = [
   './',
   './index.html',
@@ -16,6 +16,18 @@ const ASSETS = [
   './js/app.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
+  './audio/groove/kick-vintage.wav',
+  './audio/groove/kick-damped.wav',
+  './audio/groove/snare-dusty.wav',
+  './audio/groove/snare-handclap.wav',
+  './audio/groove/snare-tamb.wav',
+  './audio/groove/hat-vintage.wav',
+  './audio/groove/hat-brush.wav',
+  './audio/groove/fx-tambourine.wav',
+  './audio/groove/fx-cabasa.wav',
+  './audio/groove/fx-conga.wav',
+  './audio/groove/fx-claves.wav',
+  './audio/groove/fx-snap.wav',
 ];
 
 self.addEventListener('install', (event) => {
