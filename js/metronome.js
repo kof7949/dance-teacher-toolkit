@@ -291,6 +291,21 @@ const Metronome = (() => {
     }, delayMs);
   }
 
+  // Highlights every cell in one column of the step grid (across all roles) so the dancer
+  // can see exactly which 16th note is sounding right now, not just which beat (1-4).
+  // Queried fresh each time rather than cached, since render() fully replaces the grid's DOM
+  // on every edit.
+  function updateGroovePlayheadColumn(idx) {
+    document.querySelectorAll('.groove-step.playhead-col').forEach((el) => el.classList.remove('playhead-col'));
+    if (idx == null) return;
+    document.querySelectorAll(`[data-groove-step$=":${idx}"]`).forEach((el) => el.classList.add('playhead-col'));
+  }
+
+  function scheduleGroovePlayhead(time, idx) {
+    const delayMs = Math.max(0, (time - audioCtx.currentTime) * 1000);
+    setTimeout(() => updateGroovePlayheadColumn(idx), delayMs);
+  }
+
   function scheduler() {
     if (state.mode === 'groove') return schedulerGroove();
     while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
@@ -315,6 +330,7 @@ const Metronome = (() => {
       }
       if (idx % 4 === 0) schedulePulse(nextNoteTime);
       scheduleCountDisplay(nextNoteTime, Math.floor(idx / 4) + 1);
+      scheduleGroovePlayhead(nextNoteTime, idx);
       const swing = groovePattern.swing || 0;
       nextNoteTime += (idx % 2 === 0) ? interval * (1 + swing) : interval * (1 - swing);
       grooveStepIndex++;
@@ -358,6 +374,7 @@ const Metronome = (() => {
     releaseWakeLock();
     updatePlayButton();
     if (countEl) countEl.textContent = '–';
+    updateGroovePlayheadColumn(null);
   }
 
   function togglePlay() {

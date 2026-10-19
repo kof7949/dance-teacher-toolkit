@@ -678,6 +678,7 @@ main {
 }
 .groove-step.groove-step-beat { border-color: var(--text-dim); }
 .groove-step.active { background: var(--accent); border-color: var(--accent); }
+.groove-step.playhead-col { box-shadow: 0 0 0 2px var(--accent-2); }
 
 .formation-fullscreen-shell {
   position: fixed;
