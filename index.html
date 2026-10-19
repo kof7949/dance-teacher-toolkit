@@ -49,12 +49,13 @@
             <option value="">No song loaded</option>
           </select>
           <label class="btn btn-small" for="song-file">+ Load</label>
-          <input type="file" id="song-file" accept="audio/*" hidden />
+          <input type="file" id="song-file" accept="audio/*,video/*" hidden />
           <button id="btn-delete-song" class="btn btn-small btn-danger" title="Delete this song">🗑</button>
         </div>
 
         <div class="waveform-wrap">
           <canvas id="waveform" height="130"></canvas>
+          <video id="video-player" class="video-player" playsinline hidden></video>
           <div id="loop-region" class="loop-region" hidden></div>
           <div id="loop-in-marker" class="loop-marker" hidden><span class="loop-marker-label">In</span></div>
           <div id="loop-out-marker" class="loop-marker" hidden><span class="loop-marker-label">Out</span></div>

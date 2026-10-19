@@ -6,6 +6,23 @@ const Music = (() => {
   let loopStart = null;
   let loopEnd = null;
 
+  function activeMedia() {
+    return currentSong && currentSong.kind === 'video' ? el.video : el.audio;
+  }
+
+  function probeVideoDuration(blob) {
+    return new Promise((resolve) => {
+      const probe = document.createElement('video');
+      probe.preload = 'metadata';
+      probe.src = URL.createObjectURL(blob);
+      probe.onloadedmetadata = () => {
+        const duration = probe.duration;
+        URL.revokeObjectURL(probe.src);
+        resolve(duration);
+      };
+    });
+  }
+
   function fmtTime(sec) {
     if (!isFinite(sec) || sec < 0) sec = 0;
     const m = Math.floor(sec / 60);
@@ -46,6 +63,7 @@ const Music = (() => {
     el.tagNumBtns = Array.from(document.querySelectorAll('.tag-num'));
     el.tagList = document.getElementById('tag-list');
     el.audio = document.getElementById('audio-player');
+    el.video = document.getElementById('video-player');
     el.btnDeleteSong = document.getElementById('btn-delete-song');
     el.nudgeInMinus = document.getElementById('btn-nudge-in-minus');
     el.nudgeInPlus = document.getElementById('btn-nudge-in-plus');
@@ -118,6 +136,9 @@ const Music = (() => {
     if (!id) {
       currentSong = null;
       el.audio.removeAttribute('src');
+      el.video.removeAttribute('src');
+      el.video.hidden = true;
+      el.waveform.hidden = false;
       el.btnPlay.disabled = true;
       drawWaveform([]);
       renderTags([]);
@@ -128,18 +149,23 @@ const Music = (() => {
     currentSong = song;
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     objectUrl = URL.createObjectURL(song.blob);
-    el.audio.src = objectUrl;
-    el.audio.playbackRate = Number(el.speedSlider.value) / 100;
-    el.audio.preservesPitch = true;
-    el.audio.mozPreservesPitch = true;
-    el.audio.webkitPreservesPitch = true;
+    const isVideo = song.kind === 'video';
+    const media = isVideo ? el.video : el.audio;
+    (isVideo ? el.audio : el.video).removeAttribute('src');
+    media.src = objectUrl;
+    media.playbackRate = Number(el.speedSlider.value) / 100;
+    media.preservesPitch = true;
+    media.mozPreservesPitch = true;
+    media.webkitPreservesPitch = true;
+    el.video.hidden = !isVideo;
+    el.waveform.hidden = isVideo;
     el.btnPlay.disabled = false;
     el.btnPlay.textContent = '▶';
     loopStart = null;
     loopEnd = null;
     el.loopEnabled.checked = false;
     hideLoopRegion();
-    drawWaveform(song.peaks);
+    drawWaveform(isVideo ? [] : song.peaks);
     el.timeTotal.textContent = fmtTime(song.duration);
     const tags = await DB.getAllByIndex('counts', 'bySong', song.id);
     renderTags(tags.sort((a, b) => a.time - b.time));
@@ -199,12 +225,12 @@ const Music = (() => {
       if (loopStart == null) return;
       const maxVal = loopEnd != null ? Math.max(0, loopEnd - 0.05) : dur;
       loopStart = Math.min(maxVal, Math.max(0, loopStart + delta));
-      el.audio.currentTime = loopStart;
+      activeMedia().currentTime = loopStart;
     } else {
       if (loopEnd == null) return;
       const minVal = loopStart != null ? Math.min(dur, loopStart + 0.05) : 0;
       loopEnd = Math.max(minVal, Math.min(dur, loopEnd + delta));
-      el.audio.currentTime = loopEnd;
+      activeMedia().currentTime = loopEnd;
     }
     updateLoopRegionUI();
   }
@@ -240,7 +266,7 @@ const Music = (() => {
 
   async function addTag(label) {
     if (!currentSong) return;
-    const tag = { id: DB.uid(), songId: currentSong.id, time: el.audio.currentTime, label };
+    const tag = { id: DB.uid(), songId: currentSong.id, time: activeMedia().currentTime, label };
     await DB.put('counts', tag);
     const tags = await DB.getAllByIndex('counts', 'bySong', currentSong.id);
     renderTags(tags.sort((a, b) => a.time - b.time));
@@ -251,6 +277,7 @@ const Music = (() => {
     el.speedSlider.value = pct;
     el.speedValue.textContent = pct + '%';
     el.audio.playbackRate = pct / 100;
+    el.video.playbackRate = pct / 100;
     el.speedChips.forEach((c) => c.classList.toggle('active', Number(c.dataset.speed) === pct));
   }
 
@@ -258,12 +285,20 @@ const Music = (() => {
     el.songFile.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const arrayBuffer = await file.arrayBuffer();
-      const { peaks, duration } = await decodePeaks(arrayBuffer);
+      const isVideo = file.type.startsWith('video/');
+      let peaks = [];
+      let duration;
+      if (isVideo) {
+        duration = await probeVideoDuration(file);
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        ({ peaks, duration } = await decodePeaks(arrayBuffer));
+      }
       const song = {
         id: DB.uid(),
         name: file.name.replace(/\.[a-zA-Z0-9]+$/, ''),
         blob: file,
+        kind: isVideo ? 'video' : 'audio',
         duration,
         peaks,
       };
@@ -276,32 +311,38 @@ const Music = (() => {
     el.songSelect.addEventListener('change', () => loadSong(el.songSelect.value));
 
     el.btnPlay.addEventListener('click', () => {
-      if (el.audio.paused) {
-        el.audio.play();
+      const media = activeMedia();
+      if (media.paused) {
+        media.play();
         el.btnPlay.textContent = '⏸';
       } else {
-        el.audio.pause();
+        media.pause();
         el.btnPlay.textContent = '▶';
       }
     });
 
-    el.audio.addEventListener('ended', () => { el.btnPlay.textContent = '▶'; });
+    const handleEnded = () => { el.btnPlay.textContent = '▶'; };
+    el.audio.addEventListener('ended', handleEnded);
+    el.video.addEventListener('ended', handleEnded);
 
-    el.audio.addEventListener('timeupdate', () => {
-      el.timeCurrent.textContent = fmtTime(el.audio.currentTime);
+    const handleTimeUpdate = () => {
+      const media = activeMedia();
+      el.timeCurrent.textContent = fmtTime(media.currentTime);
       if (currentSong && currentSong.duration) {
-        const pct = (el.audio.currentTime / currentSong.duration) * 100;
+        const pct = (media.currentTime / currentSong.duration) * 100;
         el.playhead.style.left = pct + '%';
         el.playhead.hidden = false;
       }
       if (el.loopEnabled.checked && loopStart != null && loopEnd != null) {
         const hi = Math.max(loopStart, loopEnd);
         const lo = Math.min(loopStart, loopEnd);
-        if (el.audio.currentTime >= hi || el.audio.currentTime < lo) {
-          el.audio.currentTime = lo;
+        if (media.currentTime >= hi || media.currentTime < lo) {
+          media.currentTime = lo;
         }
       }
-    });
+    };
+    el.audio.addEventListener('timeupdate', handleTimeUpdate);
+    el.video.addEventListener('timeupdate', handleTimeUpdate);
 
     el.waveWrap.addEventListener('pointerdown', (e) => {
       if (!currentSong) return;
@@ -320,7 +361,7 @@ const Music = (() => {
       scrubbing = false;
       el.scrubMarker.hidden = true;
       el.scrubTooltip.hidden = true;
-      el.audio.currentTime = scrubTime;
+      activeMedia().currentTime = scrubTime;
     });
     el.waveWrap.addEventListener('pointercancel', () => {
       scrubbing = false;
@@ -330,12 +371,12 @@ const Music = (() => {
 
     el.btnLoopStart.addEventListener('click', () => {
       if (!currentSong) return;
-      loopStart = el.audio.currentTime;
+      loopStart = activeMedia().currentTime;
       updateLoopRegionUI();
     });
     el.btnLoopEnd.addEventListener('click', () => {
       if (!currentSong) return;
-      loopEnd = el.audio.currentTime;
+      loopEnd = activeMedia().currentTime;
       updateLoopRegionUI();
     });
     el.btnClearLoop.addEventListener('click', () => {
@@ -367,7 +408,7 @@ const Music = (() => {
     el.tagList.addEventListener('click', (e) => {
       const seekBtn = e.target.closest('[data-seek]');
       if (seekBtn) {
-        el.audio.currentTime = Number(seekBtn.dataset.seek);
+        activeMedia().currentTime = Number(seekBtn.dataset.seek);
         return;
       }
       const delBtn = e.target.closest('[data-del]');
