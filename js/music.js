@@ -5,6 +5,21 @@ const Music = (() => {
   let objectUrl = null;
   let loopStart = null;
   let loopEnd = null;
+  let currentTags = [];
+
+  const BEAT_HUD_SETTINGS_KEY = 'dance-toolkit-beathud-settings';
+  let beatHud = { visible: false, x: null, y: null };
+
+  function loadBeatHudSettings() {
+    try {
+      const raw = localStorage.getItem(BEAT_HUD_SETTINGS_KEY);
+      if (raw) Object.assign(beatHud, JSON.parse(raw));
+    } catch (err) { /* ignore */ }
+  }
+
+  function saveBeatHudSettings() {
+    try { localStorage.setItem(BEAT_HUD_SETTINGS_KEY, JSON.stringify(beatHud)); } catch (err) { /* ignore */ }
+  }
 
   function activeMedia() {
     return currentSong && currentSong.kind === 'video' ? el.video : el.audio;
@@ -71,6 +86,9 @@ const Music = (() => {
     el.nudgeOutPlus = document.getElementById('btn-nudge-out-plus');
     el.loopInTime = document.getElementById('loop-in-time');
     el.loopOutTime = document.getElementById('loop-out-time');
+    el.beatHud = document.getElementById('beat-hud');
+    el.beatHudValue = document.getElementById('beat-hud-value');
+    el.btnToggleBeatHud = document.getElementById('btn-toggle-beathud');
   }
 
   async function decodePeaks(arrayBuffer, buckets = 320) {
@@ -249,6 +267,8 @@ const Music = (() => {
   }
 
   function renderTags(tags) {
+    currentTags = tags;
+    updateBeatHudVisibility();
     if (!tags.length) {
       el.tagList.innerHTML = '<div class="empty-state">No count markers yet. Play the song and tap a number above.</div>';
       return;
@@ -262,6 +282,70 @@ const Music = (() => {
         <button class="tag-del" data-del="${t.id}">✕</button>
       </div>
     `).join('');
+  }
+
+  // Beat HUD: a small floating, draggable counter so a dancer can glance at the current
+  // count without looking back at the (often off-screen, while dancing) tag list.
+  function updateBeatHudVisibility() {
+    const shouldShow = beatHud.visible && currentTags.length > 0;
+    el.beatHud.hidden = !shouldShow;
+    el.btnToggleBeatHud.textContent = beatHud.visible ? '👁 Hide floating counter' : '👁 Show floating counter';
+    if (shouldShow) updateBeatHudValue(activeMedia().currentTime);
+  }
+
+  function updateBeatHudValue(currentTime) {
+    let active = null;
+    for (const t of currentTags) {
+      if (t.time <= currentTime) active = t; else break;
+    }
+    el.beatHudValue.textContent = active ? active.label : '–';
+  }
+
+  function applyBeatHudPosition() {
+    if (beatHud.x == null || beatHud.y == null) return;
+    el.beatHud.style.left = beatHud.x + 'px';
+    el.beatHud.style.top = beatHud.y + 'px';
+    el.beatHud.style.right = 'auto';
+    el.beatHud.style.bottom = 'auto';
+  }
+
+  function clampHudPosition(x, y) {
+    const rect = el.beatHud.getBoundingClientRect();
+    const maxX = Math.max(0, window.innerWidth - rect.width);
+    const maxY = Math.max(0, window.innerHeight - rect.height);
+    return [Math.min(Math.max(0, x), maxX), Math.min(Math.max(0, y), maxY)];
+  }
+
+  function wireBeatHudDrag() {
+    let dragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+    el.beatHud.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      el.beatHud.classList.add('dragging');
+      const rect = el.beatHud.getBoundingClientRect();
+      offsetX = e.clientX - rect.left;
+      offsetY = e.clientY - rect.top;
+      try { el.beatHud.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    el.beatHud.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const [x, y] = clampHudPosition(e.clientX - offsetX, e.clientY - offsetY);
+      el.beatHud.style.left = x + 'px';
+      el.beatHud.style.top = y + 'px';
+      el.beatHud.style.right = 'auto';
+      el.beatHud.style.bottom = 'auto';
+    });
+    const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      el.beatHud.classList.remove('dragging');
+      beatHud.x = parseFloat(el.beatHud.style.left);
+      beatHud.y = parseFloat(el.beatHud.style.top);
+      saveBeatHudSettings();
+    };
+    el.beatHud.addEventListener('pointerup', endDrag);
+    el.beatHud.addEventListener('pointercancel', endDrag);
   }
 
   async function addTag(label) {
@@ -340,6 +424,7 @@ const Music = (() => {
           media.currentTime = lo;
         }
       }
+      if (!el.beatHud.hidden) updateBeatHudValue(media.currentTime);
     };
     el.audio.addEventListener('timeupdate', handleTimeUpdate);
     el.video.addEventListener('timeupdate', handleTimeUpdate);
@@ -431,12 +516,22 @@ const Music = (() => {
     });
 
     window.addEventListener('resize', redrawWaveformIfNeeded);
+
+    el.btnToggleBeatHud.addEventListener('click', () => {
+      beatHud.visible = !beatHud.visible;
+      saveBeatHudSettings();
+      updateBeatHudVisibility();
+    });
+    wireBeatHudDrag();
   }
 
   async function init() {
     cacheEls();
     wireEvents();
     setSpeed(100);
+    loadBeatHudSettings();
+    applyBeatHudPosition();
+    updateBeatHudVisibility();
     await populateSongSelect();
   }
 
