@@ -131,7 +131,7 @@ const Metronome = (() => {
   }
 
   let root;
-  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false, mode: 'classic' };
+  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false, mode: 'classic', grooveAccentMode: false };
   let audioCtx = null;
   let schedulerTimer = null;
   let nextNoteTime = 0;
@@ -156,6 +156,7 @@ const Metronome = (() => {
         if (saved.sound && SOUNDS.some((s) => s.id === saved.sound)) state.sound = saved.sound;
         if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
         if (saved.mode === 'groove' || saved.mode === 'classic') state.mode = saved.mode;
+        if (typeof saved.grooveAccentMode === 'boolean') state.grooveAccentMode = saved.grooveAccentMode;
         if (saved.groovePattern && Array.isArray(saved.groovePattern.tracks)) {
           groovePattern = saved.groovePattern;
           grooveActivePresetId = saved.grooveActivePresetId || null;
@@ -172,7 +173,7 @@ const Metronome = (() => {
     try {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({
         bpm: state.bpm, sound: state.sound, countLength: state.countLength,
-        mode: state.mode, groovePattern, grooveActivePresetId,
+        mode: state.mode, grooveAccentMode: state.grooveAccentMode, groovePattern, grooveActivePresetId,
       }));
     } catch (err) { /* ignore */ }
   }
@@ -446,9 +447,15 @@ const Metronome = (() => {
   function cycleGrooveStep(role, index) {
     const track = groovePattern.tracks.find((t) => t.role === role);
     if (!track) return;
-    const current = VELOCITY_LEVELS.indexOf(track.steps[index]);
-    const nextIdx = ((current === -1 ? 0 : current) + 1) % VELOCITY_LEVELS.length;
-    track.steps[index] = VELOCITY_LEVELS[nextIdx];
+    if (state.grooveAccentMode) {
+      const current = VELOCITY_LEVELS.indexOf(track.steps[index]);
+      const nextIdx = ((current === -1 ? 0 : current) + 1) % VELOCITY_LEVELS.length;
+      track.steps[index] = VELOCITY_LEVELS[nextIdx];
+    } else {
+      // Plain on/off: one tap to add a beat, one tap to remove it, instead of cycling
+      // through every velocity tier to get back to off.
+      track.steps[index] = track.steps[index] ? 0 : VELOCITY_MEDIUM;
+    }
     grooveActivePresetId = null;
     saveSettings();
     render();
@@ -485,6 +492,12 @@ const Metronome = (() => {
   function setGrooveSwing(value) {
     groovePattern.swing = value;
     grooveActivePresetId = null;
+    saveSettings();
+    render();
+  }
+
+  function setGrooveAccentMode(enabled) {
+    state.grooveAccentMode = enabled;
     saveSettings();
     render();
   }
@@ -636,7 +649,15 @@ const Metronome = (() => {
         ${SWING_OPTIONS.map((s) => `<button class="chip ${Math.abs((groovePattern.swing || 0) - s) < 0.001 ? 'active' : ''}" data-groove-swing="${s}">${Math.round(s * 100)}%</button>`).join('')}
       </div>
 
-      <div class="tag-label" style="text-align:center; margin-top:10px;">Tap a step to cycle: off → soft → medium → accent</div>
+      <div style="display:flex; justify-content:center; margin:12px 0 2px;">
+        <label class="switch">
+          <input type="checkbox" id="groove-accent-toggle" ${state.grooveAccentMode ? 'checked' : ''} />
+          <span>Accent levels</span>
+        </label>
+      </div>
+      <div class="tag-label" style="text-align:center;">
+        ${state.grooveAccentMode ? 'Tap a step to cycle: off → soft → medium → accent' : 'Tap a step to toggle it on or off'}
+      </div>
       <div class="groove-grid">
         ${GROOVE_ROLES.map((role) => {
           const track = groovePattern.tracks.find((t) => t.role === role);
@@ -805,6 +826,9 @@ const Metronome = (() => {
     if (e.target.id === 'metro-bpm-input') {
       const typed = Number(e.target.value);
       setBpm(Number.isFinite(typed) && e.target.value.trim() !== '' ? typed : state.bpm);
+    }
+    if (e.target.id === 'groove-accent-toggle') {
+      setGrooveAccentMode(e.target.checked);
     }
   }
 
