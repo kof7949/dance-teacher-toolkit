@@ -56,7 +56,10 @@ const Metronome = (() => {
   // Each step stores a velocity (0 = off, otherwise the sample's playback gain) rather than a
   // plain boolean, so a tap cycles through off -> soft -> medium -> accent -> off instead of
   // just on/off -- no drag gesture needed, which would be fiddly on small touch targets.
-  const VELOCITY_LEVELS = [0, 0.55, 0.8, 1];
+  // Wide enough to make "accent" actually pop against "medium" (previously 0.8 -> 1 was only
+  // ~2dB, barely audible). A shared limiter on the groove bus (see ensureGrooveMaster) keeps
+  // the louder end from clipping even though it nominally exceeds the samples' normalized peak.
+  const VELOCITY_LEVELS = [0, 0.35, 0.75, 1.6];
   const VELOCITY_SOFT = VELOCITY_LEVELS[1];
   const VELOCITY_MEDIUM = VELOCITY_LEVELS[2];
   const VELOCITY_ACCENT = VELOCITY_LEVELS[3];
@@ -142,6 +145,7 @@ const Metronome = (() => {
   let grooveStepIndex = 0;
   let grooveBuffers = {};
   let grooveBuffersLoading = null;
+  let grooveMasterNode = null;
 
   function loadSettings() {
     try {
@@ -189,6 +193,24 @@ const Metronome = (() => {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
+  }
+
+  // A single limiter all Groove samples route through, so an accented hit (deliberately
+  // louder than the samples' own normalized peak, to make it actually sound accented) gets
+  // caught cleanly instead of clipping, rather than needing to keep every velocity level
+  // conservative enough to never exceed 0dBFS on its own.
+  function ensureGrooveMaster() {
+    if (grooveMasterNode) return grooveMasterNode;
+    const ctx = ensureAudioContext();
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.setValueAtTime(-6, ctx.currentTime);
+    limiter.knee.setValueAtTime(0, ctx.currentTime);
+    limiter.ratio.setValueAtTime(20, ctx.currentTime);
+    limiter.attack.setValueAtTime(0.001, ctx.currentTime);
+    limiter.release.setValueAtTime(0.1, ctx.currentTime);
+    limiter.connect(ctx.destination);
+    grooveMasterNode = limiter;
+    return grooveMasterNode;
   }
 
   function createNoiseBuffer(ctx) {
@@ -292,7 +314,7 @@ const Metronome = (() => {
     src.buffer = buffer;
     const gain = audioCtx.createGain();
     gain.gain.setValueAtTime(velocity, time);
-    src.connect(gain).connect(audioCtx.destination);
+    src.connect(gain).connect(ensureGrooveMaster());
     src.start(time);
   }
 
