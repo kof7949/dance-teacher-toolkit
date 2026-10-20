@@ -45,12 +45,15 @@ const Metronome = (() => {
     { id: 'fx-conga', role: 'fx', label: 'Conga', url: 'audio/groove/fx-conga.wav' },
     { id: 'fx-claves', role: 'fx', label: 'Claves', url: 'audio/groove/fx-claves.wav' },
     { id: 'fx-snap', role: 'fx', label: 'Snap', url: 'audio/groove/fx-snap.wav' },
+    // Synthesized (no sample file) -- same oscillator/envelope technique as the Classic
+    // mode's Kick/Bass/Hi-Hat/Snare, so it needs no audio file and nothing to precache.
+    { id: 'fx-piano', role: 'fx', label: 'Piano', synth: 'piano' },
   ];
   const ROLE_SAMPLE_OPTIONS = {
     kick: ['kick-vintage', 'kick-damped'],
     snare: ['snare-dusty', 'snare-handclap', 'snare-tamb'],
     hat: ['hat-vintage', 'hat-brush'],
-    fx: ['fx-tambourine', 'fx-cabasa', 'fx-conga', 'fx-claves', 'fx-snap'],
+    fx: ['fx-tambourine', 'fx-cabasa', 'fx-conga', 'fx-claves', 'fx-snap', 'fx-piano'],
   };
 
   // Each step stores a velocity (0 = off, otherwise the sample's playback gain) rather than a
@@ -300,6 +303,7 @@ const Metronome = (() => {
     if (grooveBuffersLoading) return grooveBuffersLoading;
     const ctx = ensureAudioContext();
     grooveBuffersLoading = Promise.all(GROOVE_SAMPLES.map(async (s) => {
+      if (s.synth) return; // synthesized live, nothing to fetch
       if (grooveBuffers[s.id]) return;
       const res = await fetch(s.url);
       const arrayBuffer = await res.arrayBuffer();
@@ -308,7 +312,37 @@ const Metronome = (() => {
     return grooveBuffersLoading;
   }
 
+  // A simple additive piano-ish pluck: a handful of harmonically (and one slightly
+  // inharmonically) related sine partials under one shared envelope -- the same spirit as the
+  // Classic mode's oscillator-based sounds, just layered into a tone instead of a single pitch.
+  function playSynthPiano(time, velocity) {
+    const fundamental = 261.63; // C4
+    const partials = [
+      { ratio: 1, gain: 0.6 },
+      { ratio: 2, gain: 0.25 },
+      { ratio: 3, gain: 0.12 },
+      { ratio: 4.2, gain: 0.06 },
+    ];
+    const master = audioCtx.createGain();
+    master.gain.setValueAtTime(0.0001, time);
+    master.gain.exponentialRampToValueAtTime(Math.max(0.001, velocity), time + 0.006);
+    master.gain.exponentialRampToValueAtTime(0.0001, time + 0.9);
+    master.connect(ensureGrooveMaster());
+    partials.forEach((p) => {
+      const osc = audioCtx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(fundamental * p.ratio, time);
+      const partialGain = audioCtx.createGain();
+      partialGain.gain.setValueAtTime(p.gain, time);
+      osc.connect(partialGain).connect(master);
+      osc.start(time);
+      osc.stop(time + 0.95);
+    });
+  }
+
   function playGrooveSample(sampleId, time, velocity = VELOCITY_ACCENT) {
+    const sample = GROOVE_SAMPLES.find((s) => s.id === sampleId);
+    if (sample && sample.synth === 'piano') return playSynthPiano(time, velocity);
     const buffer = grooveBuffers[sampleId];
     if (!buffer) return;
     const src = audioCtx.createBufferSource();
