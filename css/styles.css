@@ -667,7 +667,9 @@ main {
   padding: 0;
 }
 .groove-step.groove-step-beat { border-color: var(--text-dim); }
-.groove-step.active { background: var(--accent); border-color: var(--accent); }
+.groove-step.vel-soft { background: rgba(168, 85, 247, 0.4); border-color: rgba(168, 85, 247, 0.55); }
+.groove-step.vel-medium { background: var(--accent); border-color: var(--accent); }
+.groove-step.vel-accent { background: var(--accent-2); border-color: var(--accent-2); }
 .groove-step.playhead-col { box-shadow: 0 0 0 2px #fff; }
 
 .groove-preset-chip { display: inline-flex; align-items: center; gap: 3px; }

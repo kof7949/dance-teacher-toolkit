@@ -53,8 +53,31 @@ const Metronome = (() => {
     fx: ['fx-tambourine', 'fx-cabasa', 'fx-conga', 'fx-claves', 'fx-snap'],
   };
 
-  function emptySteps() { return new Array(STEPS_PER_BAR).fill(false); }
-  function stepsAt(indices) { const s = emptySteps(); indices.forEach((i) => { s[i] = true; }); return s; }
+  // Each step stores a velocity (0 = off, otherwise the sample's playback gain) rather than a
+  // plain boolean, so a tap cycles through off -> soft -> medium -> accent -> off instead of
+  // just on/off -- no drag gesture needed, which would be fiddly on small touch targets.
+  const VELOCITY_LEVELS = [0, 0.55, 0.8, 1];
+  const VELOCITY_SOFT = VELOCITY_LEVELS[1];
+  const VELOCITY_MEDIUM = VELOCITY_LEVELS[2];
+  const VELOCITY_ACCENT = VELOCITY_LEVELS[3];
+
+  function emptySteps() { return new Array(STEPS_PER_BAR).fill(0); }
+  function stepsAt(indices, velocity = VELOCITY_MEDIUM) {
+    const s = emptySteps();
+    indices.forEach((i) => { s[i] = velocity; });
+    return s;
+  }
+  function mergeSteps(...groups) {
+    const s = emptySteps();
+    groups.forEach(([indices, velocity]) => indices.forEach((i) => { s[i] = velocity; }));
+    return s;
+  }
+  function grooveVelocityClass(v) {
+    if (!v) return '';
+    if (v >= VELOCITY_ACCENT) return 'vel-accent';
+    if (v >= VELOCITY_MEDIUM) return 'vel-medium';
+    return 'vel-soft';
+  }
 
   // Original patterns authored for this app -- standard genre rhythm idioms (four-on-the-floor,
   // boom-bap, etc.) are generic musical conventions, not copied step data from any other app.
@@ -62,7 +85,7 @@ const Metronome = (() => {
     {
       id: 'house-four-floor', name: 'Four on the Floor', genre: 'House', bpm: 124, swing: 0,
       tracks: [
-        { role: 'kick', sampleId: 'kick-vintage', steps: stepsAt([0, 4, 8, 12]) },
+        { role: 'kick', sampleId: 'kick-vintage', steps: mergeSteps([[0], VELOCITY_ACCENT], [[4, 8, 12], VELOCITY_MEDIUM]) },
         { role: 'snare', sampleId: 'snare-handclap', steps: stepsAt([4, 12]) },
         { role: 'hat', sampleId: 'hat-vintage', steps: stepsAt([2, 6, 10, 14]) },
         { role: 'fx', sampleId: 'fx-claves', steps: emptySteps() },
@@ -81,7 +104,7 @@ const Metronome = (() => {
       id: 'funk-pocket', name: 'Funk Pocket', genre: 'Funk', bpm: 104, swing: 0.16,
       tracks: [
         { role: 'kick', sampleId: 'kick-vintage', steps: stepsAt([0, 3, 8, 11]) },
-        { role: 'snare', sampleId: 'snare-tamb', steps: stepsAt([4, 12, 14]) },
+        { role: 'snare', sampleId: 'snare-tamb', steps: mergeSteps([[4, 12], VELOCITY_ACCENT], [[14], VELOCITY_SOFT]) },
         { role: 'hat', sampleId: 'hat-vintage', steps: stepsAt([0, 2, 4, 6, 8, 10, 12, 14]) },
         { role: 'fx', sampleId: 'fx-cabasa', steps: stepsAt([6]) },
       ],
@@ -262,13 +285,13 @@ const Metronome = (() => {
     return grooveBuffersLoading;
   }
 
-  function playGrooveSample(sampleId, time) {
+  function playGrooveSample(sampleId, time, velocity = VELOCITY_ACCENT) {
     const buffer = grooveBuffers[sampleId];
     if (!buffer) return;
     const src = audioCtx.createBufferSource();
     src.buffer = buffer;
     const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.9, time);
+    gain.gain.setValueAtTime(velocity, time);
     src.connect(gain).connect(audioCtx.destination);
     src.start(time);
   }
@@ -326,7 +349,8 @@ const Metronome = (() => {
     while (nextNoteTime < audioCtx.currentTime + SCHEDULE_AHEAD_SEC) {
       const idx = grooveStepIndex % STEPS_PER_BAR;
       for (const track of groovePattern.tracks) {
-        if (track.steps[idx]) playGrooveSample(track.sampleId, nextNoteTime);
+        const velocity = track.steps[idx];
+        if (velocity) playGrooveSample(track.sampleId, nextNoteTime, velocity);
       }
       if (idx % 4 === 0) schedulePulse(nextNoteTime);
       scheduleCountDisplay(nextNoteTime, Math.floor(idx / 4) + 1);
@@ -397,10 +421,12 @@ const Metronome = (() => {
     render();
   }
 
-  function toggleGrooveStep(role, index) {
+  function cycleGrooveStep(role, index) {
     const track = groovePattern.tracks.find((t) => t.role === role);
     if (!track) return;
-    track.steps[index] = !track.steps[index];
+    const current = VELOCITY_LEVELS.indexOf(track.steps[index]);
+    const nextIdx = ((current === -1 ? 0 : current) + 1) % VELOCITY_LEVELS.length;
+    track.steps[index] = VELOCITY_LEVELS[nextIdx];
     grooveActivePresetId = null;
     saveSettings();
     render();
@@ -588,6 +614,7 @@ const Metronome = (() => {
         ${SWING_OPTIONS.map((s) => `<button class="chip ${Math.abs((groovePattern.swing || 0) - s) < 0.001 ? 'active' : ''}" data-groove-swing="${s}">${Math.round(s * 100)}%</button>`).join('')}
       </div>
 
+      <div class="tag-label" style="text-align:center; margin-top:10px;">Tap a step to cycle: off → soft → medium → accent</div>
       <div class="groove-grid">
         ${GROOVE_ROLES.map((role) => {
           const track = groovePattern.tracks.find((t) => t.role === role);
@@ -599,7 +626,7 @@ const Metronome = (() => {
                 <span class="groove-sample-name">${escapeHtml(sampleLabel)}</span>
               </button>
               <div class="groove-steps">
-                ${track.steps.map((on, i) => `<button class="groove-step ${on ? 'active' : ''} ${i % 4 === 0 ? 'groove-step-beat' : ''}" data-groove-step="${role}:${i}"></button>`).join('')}
+                ${track.steps.map((v, i) => `<button class="groove-step ${grooveVelocityClass(v)} ${i % 4 === 0 ? 'groove-step-beat' : ''}" data-groove-step="${role}:${i}"></button>`).join('')}
               </div>
             </div>
           `;
@@ -710,7 +737,7 @@ const Metronome = (() => {
     }
     if (grooveStep) {
       const [role, idx] = grooveStep.split(':');
-      return toggleGrooveStep(role, Number(idx));
+      return cycleGrooveStep(role, Number(idx));
     }
     if (grooveCycleSample) {
       return cycleGrooveSample(grooveCycleSample);
