@@ -42,6 +42,10 @@
   </header>
 
   <main id="main">
+    <section id="screen-progress" class="screen">
+      <div id="progress-root"></div>
+    </section>
+
     <section id="screen-music" class="screen active">
       <div class="card player-card">
         <div class="song-row">
@@ -142,14 +146,6 @@
       </div>
     </section>
 
-    <section id="screen-progress" class="screen">
-      <div id="progress-root"></div>
-    </section>
-
-    <section id="screen-formation" class="screen">
-      <div id="formation-root"></div>
-    </section>
-
     <section id="screen-metronome" class="screen">
       <div id="metronome-root"></div>
     </section>
@@ -157,23 +153,27 @@
     <section id="screen-countdown" class="screen">
       <div id="countdown-root"></div>
     </section>
+
+    <section id="screen-formation" class="screen">
+      <div id="formation-root"></div>
+    </section>
   </main>
 
   <nav class="tabbar">
-    <button class="tab active" data-screen="music">
-      <span class="tab-icon">🎵</span><span>Music &amp; Count</span>
-    </button>
     <button class="tab" data-screen="progress">
       <span class="tab-icon">📋</span><span>Progress</span>
     </button>
-    <button class="tab" data-screen="formation">
-      <span class="tab-icon">🕺</span><span>Formation</span>
+    <button class="tab active" data-screen="music">
+      <span class="tab-icon">🎵</span><span>Music &amp; Count</span>
     </button>
     <button class="tab" data-screen="metronome">
       <span class="tab-icon">🥁</span><span>Metronome</span>
     </button>
     <button class="tab" data-screen="countdown">
       <span class="tab-icon">⏱️</span><span>Countdown</span>
+    </button>
+    <button class="tab" data-screen="formation">
+      <span class="tab-icon">🕺</span><span>Formation</span>
     </button>
   </nav>
 
