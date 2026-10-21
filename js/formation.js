@@ -8,15 +8,18 @@ const Formation = (() => {
   let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false, mirrorView: false };
   const MIRROR_VIEW_KEY = 'dance-toolkit-formation-mirror';
 
-  // A chart drawn in the normal (audience) view has stage-right appear on the LEFT of the
-  // screen, since that's what it looks like from the house looking at the stage. A performer
-  // looking at the same chart while standing on stage facing the audience has to mentally
-  // flip left/right to make sense of it. Mirror view flips the horizontal axis for display
-  // only -- stored x/y (and the PDF export) always stay in the one true audience-view
-  // coordinate system -- so a dancer can read it the same way they'd read their own
-  // reflection. The transform is its own inverse, so the same function also converts a drag's
-  // on-screen x back to the stored coordinate when mirror view is active.
+  // A chart drawn in the normal (audience) view is the house looking at the stage: stage
+  // right (the performer's right hand, facing the audience) appears on the LEFT of the
+  // screen, upstage is at the top, downstage at the bottom. A performer facing the audience
+  // is looking the opposite way up the same axis, so their view is a 180-degree turn of the
+  // whole stage, not just a left/right flip: what's on their right is on the screen's right,
+  // and what's nearest them (downstage) is nearest the top of their own view. Performer view
+  // rotates both axes for display only -- stored x/y (and the PDF export) always stay in the
+  // one true audience-view coordinate system. Each transform is its own inverse, so the same
+  // functions also convert a drag's on-screen position back to the stored coordinate when
+  // performer view is active.
   function mirrorX(x) { return state.mirrorView ? (100 - x) : x; }
+  function mirrorY(y) { return state.mirrorView ? (100 - y) : y; }
   let cache = { routines: [], dancers: [], formations: [], positions: {} }; // positions keyed by formationId -> array
   let dragInfo = null;
   let playTimer = null;
@@ -94,7 +97,7 @@ const Formation = (() => {
         const selected = state.selectedDancerId === d.id;
         return `
           <div class="dancer-dot ${selected ? 'selected' : ''}" data-dancer-dot="${d.id}"
-               style="left:${mirrorX(pos.x)}%; top:${pos.y}%; background:${d.color};" title="${escapeHtml(d.name)}">
+               style="left:${mirrorX(pos.x)}%; top:${mirrorY(pos.y)}%; background:${d.color};" title="${escapeHtml(d.name)}">
             <span class="dancer-dot-label">${escapeHtml(d.name)}</span>
           </div>
         `;
@@ -103,8 +106,8 @@ const Formation = (() => {
     return `
       <div class="stage-wrap">
         <div class="stage" id="stage">
-          <div class="stage-label stage-label-up">UPSTAGE</div>
-          <div class="stage-label stage-label-down">DOWNSTAGE (audience)</div>
+          <div class="stage-label stage-label-up">${state.mirrorView ? 'DOWNSTAGE (audience)' : 'UPSTAGE'}</div>
+          <div class="stage-label stage-label-down">${state.mirrorView ? 'UPSTAGE' : 'DOWNSTAGE (audience)'}</div>
           <div class="stage-label stage-label-sr">${state.mirrorView ? 'STAGE LEFT' : 'STAGE RIGHT'}</div>
           <div class="stage-label stage-label-sl">${state.mirrorView ? 'STAGE RIGHT' : 'STAGE LEFT'}</div>
           <div class="stage-centerline-v"></div>
@@ -347,7 +350,7 @@ const Formation = (() => {
         }
         if (existingDot) {
           existingDot.style.left = mirrorX(pos.x) + '%';
-          existingDot.style.top = pos.y + '%';
+          existingDot.style.top = mirrorY(pos.y) + '%';
           existingDot.classList.remove('selected');
         } else {
           const div = document.createElement('div');
@@ -355,7 +358,7 @@ const Formation = (() => {
           div.dataset.dancerDot = d.id;
           div.title = d.name;
           div.style.left = mirrorX(pos.x) + '%';
-          div.style.top = pos.y + '%';
+          div.style.top = mirrorY(pos.y) + '%';
           div.style.background = d.color;
           div.innerHTML = `<span class="dancer-dot-label">${escapeHtml(d.name)}</span>`;
           stage.appendChild(div);
@@ -509,8 +512,9 @@ const Formation = (() => {
     if (overStage) {
       const rect = stage.getBoundingClientRect();
       const onScreenX = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-      const x = mirrorX(onScreenX); // undo the display flip before storing (mirrorX is its own inverse)
-      const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+      const onScreenY = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+      const x = mirrorX(onScreenX); // undo the display rotation before storing (each transform is its own inverse)
+      const y = mirrorY(onScreenY);
       updated = { ...pos, id: pos.id || DB.uid(), formationId: state.currentFormationId, dancerId, x, y, offStage: false };
     } else if (overOffstage) {
       updated = { ...pos, id: pos.id || DB.uid(), formationId: state.currentFormationId, dancerId, offStage: true };
