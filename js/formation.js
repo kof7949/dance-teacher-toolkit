@@ -5,7 +5,7 @@ const Formation = (() => {
   const COLORS = ['#a855f7', '#ec4899', '#22d3ee', '#fbbf24', '#34d399', '#f87171', '#60a5fa', '#f472b6', '#fb923c', '#a3e635'];
 
   let root;
-  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false, mirrorView: false };
+  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false, mirrorView: false, layoutPickerOpen: false };
   const MIRROR_VIEW_KEY = 'dance-toolkit-formation-mirror';
 
   // A chart drawn in the normal (audience) view is the house looking at the stage: stage
@@ -20,6 +20,169 @@ const Formation = (() => {
   // performer view is active.
   function mirrorX(x) { return state.mirrorView ? (100 - x) : x; }
   function mirrorY(y) { return state.mirrorView ? (100 - y) : y; }
+
+  // ---------- Layout presets ----------
+
+  // Each generate(n) computes a shape for ANY headcount rather than hard-coding one layout
+  // per exact dancer count -- most stage shapes just scale by adding/removing dancers
+  // symmetrically (a diamond or V built for one count still reads correctly thinned or
+  // padded out). Points are in the same 0-100 audience-view coordinate system positions are
+  // stored in (see mirrorX/mirrorY above).
+  const STAGE_X_MIN = 12, STAGE_X_MAX = 88;
+  const STAGE_Y_MIN = 16, STAGE_Y_MAX = 84;
+
+  function clampPt(x, y) {
+    return { x: Math.min(98, Math.max(2, x)), y: Math.min(98, Math.max(2, y)) };
+  }
+
+  function linspace(start, end, n) {
+    if (n <= 0) return [];
+    if (n === 1) return [(start + end) / 2];
+    const step = (end - start) / (n - 1);
+    return Array.from({ length: n }, (_, i) => start + step * i);
+  }
+
+  // Distributes n points evenly (by arc length) around a closed polygon's perimeter,
+  // starting exactly at vertices[0]. When n equals the vertex count the points land exactly
+  // on the vertices (e.g. a 4-dancer diamond lands on all 4 points).
+  function polygonPerimeterPoints(vertices, n) {
+    const edges = vertices.map((v, i) => {
+      const to = vertices[(i + 1) % vertices.length];
+      return { from: v, to, len: Math.hypot(to.x - v.x, to.y - v.y) };
+    });
+    const total = edges.reduce((sum, e) => sum + e.len, 0);
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      let d = (i / n) * total;
+      let edge = edges[edges.length - 1];
+      for (const e of edges) {
+        if (d <= e.len) { edge = e; break; }
+        d -= e.len;
+      }
+      const t = edge.len ? d / edge.len : 0;
+      pts.push(clampPt(edge.from.x + (edge.to.x - edge.from.x) * t, edge.from.y + (edge.to.y - edge.from.y) * t));
+    }
+    return pts;
+  }
+
+  function ringPoints(n, { rx = 34, ry = 30, starPoints = false } = {}) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2;
+      const r = starPoints && i % 2 === 1 ? 0.45 : 1;
+      pts.push(clampPt(50 + Math.sin(angle) * rx * r, 50 + Math.cos(angle) * ry * r));
+    }
+    return pts;
+  }
+
+  // direction -1: wings sweep upstage from a downstage tip (a "V"). direction +1: wings
+  // sweep downstage from an upstage tip (a wedge/chevron).
+  function vShapePoints(n, { tipY, direction, dx = 9, dy = 9 }) {
+    const pts = [clampPt(50, tipY)];
+    let depth = 1;
+    while (pts.length < n) {
+      pts.push(clampPt(50 + depth * dx, tipY + depth * dy * direction));
+      if (pts.length < n) pts.push(clampPt(50 - depth * dx, tipY + depth * dy * direction));
+      depth++;
+    }
+    return pts.slice(0, n);
+  }
+
+  function straightLine(n) {
+    return linspace(STAGE_X_MIN, STAGE_X_MAX, n).map((x) => clampPt(x, 50));
+  }
+
+  function staggeredRows(n) {
+    const front = Math.ceil(n / 2);
+    const back = n - front;
+    const frontPts = linspace(STAGE_X_MIN, STAGE_X_MAX, front).map((x) => clampPt(x, 72));
+    const backPts = linspace(STAGE_X_MIN, STAGE_X_MAX, back).map((x) => clampPt(x, 28));
+    return frontPts.concat(backPts);
+  }
+
+  function pyramidRows(n) {
+    const rows = [];
+    let remaining = n, size = 1;
+    while (remaining > 0) {
+      const take = Math.min(size, remaining);
+      rows.push(take);
+      remaining -= take;
+      size++;
+    }
+    const yTop = 30, yBottom = 80;
+    const pts = [];
+    rows.forEach((count, i) => {
+      const y = rows.length > 1 ? yBottom - (i * (yBottom - yTop)) / (rows.length - 1) : (yTop + yBottom) / 2;
+      linspace(count > 1 ? 38 : 50, count > 1 ? 62 : 50, count).forEach((x) => pts.push(clampPt(x, y)));
+    });
+    return pts;
+  }
+
+  function blockGrid(n) {
+    const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+    const rows = Math.ceil(n / cols);
+    const spacingX = cols > 1 ? (STAGE_X_MAX - STAGE_X_MIN) / (cols - 1) : 0;
+    const spacingY = rows > 1 ? (STAGE_Y_MAX - STAGE_Y_MIN) / (rows - 1) : 0;
+    const pts = [];
+    let remaining = n;
+    for (let r = 0; r < rows; r++) {
+      const rowCols = Math.min(cols, remaining);
+      remaining -= rowCols;
+      const y = rows > 1 ? STAGE_Y_MIN + r * spacingY : 50;
+      const rowWidth = (rowCols - 1) * spacingX;
+      for (let c = 0; c < rowCols; c++) {
+        pts.push(clampPt(rowCols > 1 ? 50 - rowWidth / 2 + c * spacingX : 50, y));
+      }
+    }
+    return pts;
+  }
+
+  function diamondShape(n) {
+    const vertices = [{ x: 50, y: STAGE_Y_MAX }, { x: STAGE_X_MIN, y: 50 }, { x: 50, y: STAGE_Y_MIN }, { x: STAGE_X_MAX, y: 50 }];
+    return polygonPerimeterPoints(vertices, n);
+  }
+
+  function boxShape(n) {
+    const vertices = [{ x: STAGE_X_MIN, y: STAGE_Y_MAX }, { x: STAGE_X_MIN, y: STAGE_Y_MIN }, { x: STAGE_X_MAX, y: STAGE_Y_MIN }, { x: STAGE_X_MAX, y: STAGE_Y_MAX }];
+    return polygonPerimeterPoints(vertices, n);
+  }
+
+  function xShape(n) {
+    const corners = [{ x: STAGE_X_MIN, y: STAGE_Y_MIN }, { x: STAGE_X_MAX, y: STAGE_Y_MIN }, { x: STAGE_X_MIN, y: STAGE_Y_MAX }, { x: STAGE_X_MAX, y: STAGE_Y_MAX }];
+    const pts = [];
+    let remaining = n;
+    if (remaining % 2 === 1) { pts.push(clampPt(50, 50)); remaining--; }
+    const perArm = Math.floor(remaining / 4);
+    let extra = remaining - perArm * 4;
+    corners.forEach((c) => {
+      const count = perArm + (extra > 0 ? 1 : 0);
+      if (extra > 0) extra--;
+      for (let k = 1; k <= count; k++) {
+        const frac = k / count;
+        pts.push(clampPt(50 + (c.x - 50) * frac, 50 + (c.y - 50) * frac));
+      }
+    });
+    return pts.slice(0, n);
+  }
+
+  const FORMATION_LAYOUTS = [
+    { id: 'line', icon: '➖', label: 'Line', generate: straightLine },
+    { id: 'v', icon: '🔻', label: 'V formation', generate: (n) => vShapePoints(n, { tipY: STAGE_Y_MAX - 4, direction: -1 }) },
+    { id: 'wedge', icon: '🔺', label: 'Wedge', generate: (n) => vShapePoints(n, { tipY: STAGE_Y_MIN + 4, direction: 1 }) },
+    { id: 'diamond', icon: '💎', label: 'Diamond', generate: diamondShape },
+    { id: 'staggered', icon: '🧱', label: 'Staggered rows', generate: staggeredRows },
+    { id: 'pyramid', icon: '🏔️', label: 'Pyramid rows', generate: pyramidRows },
+    { id: 'block', icon: '▦', label: 'Block', generate: blockGrid },
+    { id: 'box', icon: '⬛', label: 'Box', generate: boxShape },
+    { id: 'circle', icon: '⭕', label: 'Circle', generate: (n) => ringPoints(n) },
+    { id: 'starburst', icon: '✴️', label: 'Starburst', generate: (n) => ringPoints(n, { starPoints: true }) },
+    { id: 'x', icon: '✖️', label: 'X formation', generate: xShape },
+  ];
+
+  function onStageDancers(formationId) {
+    return cache.dancers.filter((d) => !getPosition(formationId, d.id).offStage);
+  }
+
   let cache = { routines: [], dancers: [], formations: [], positions: {} }; // positions keyed by formationId -> array
   let dragInfo = null;
   let playTimer = null;
@@ -222,6 +385,21 @@ const Formation = (() => {
     `;
   }
 
+  function layoutPickerHtml() {
+    if (!state.layoutPickerOpen || !state.currentFormationId) return '';
+    const n = onStageDancers(state.currentFormationId).length;
+    const chips = FORMATION_LAYOUTS.map((p) => `
+      <button class="chip" data-action="apply-layout" data-layout="${p.id}">${p.icon} ${p.label}</button>
+    `).join('');
+    return `
+      <div id="layout-picker-wrap" style="margin:4px 0 14px;">
+        ${n
+          ? `<div class="tag-label">Arrange the ${n} on-stage dancer${n === 1 ? '' : 's'} into:</div><div class="tag-buttons">${chips}</div>`
+          : '<div class="tag-label">Add dancers to the stage first.</div>'}
+      </div>
+    `;
+  }
+
   function formationPanelHtml(formation) {
     return `
       <div class="card">
@@ -233,11 +411,13 @@ const Formation = (() => {
         <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
           <span>Formations</span>
           <div style="flex:1"></div>
+          ${formation ? `<button class="btn btn-small btn-ghost" data-action="toggle-layout-picker" title="Arrange on-stage dancers into a preset shape">📐 Layouts</button>` : ''}
           ${formation ? `<button class="btn btn-small btn-ghost" data-action="toggle-mirror" title="Flip to the performer's own left/right">${state.mirrorView ? '🪞 Audience view' : '🪞 Performer view'}</button>` : ''}
           ${formation ? '<button class="btn btn-small btn-ghost" data-action="enter-fullscreen" title="Full screen">⛶</button>' : ''}
         </div>
         ${formationStripHtml()}
         <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
+        ${formation ? layoutPickerHtml() : ''}
         ${cache.dancers.length === 0
           ? '<div class="empty-state">Add some dancers above before building a formation.</div>'
           : (!formation ? '<div class="empty-state">Tap "+ Add formation" to place your first formation.</div>' : stageHtml())}
@@ -289,9 +469,11 @@ const Formation = (() => {
         ${transportRowHtml()}
       </div>
       <div class="fs-side-col">
+        <button class="btn btn-small btn-ghost" data-action="toggle-layout-picker" title="Arrange on-stage dancers into a preset shape">📐 Layouts</button>
         <button class="btn btn-small btn-ghost" data-action="toggle-mirror" title="Flip to the performer's own left/right">${state.mirrorView ? '🪞 Audience view' : '🪞 Performer view'}</button>
         ${formationStripHtml()}
         <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
+        ${layoutPickerHtml()}
         <div class="tag-label">Tap a dancer dot to add a note for this formation</div>
         <div id="formation-note-wrap">${selectedDancerNoteHtml()}</div>
         ${offStageHtml()}
@@ -457,6 +639,29 @@ const Formation = (() => {
     state.mirrorView = !state.mirrorView;
     try { localStorage.setItem(MIRROR_VIEW_KEY, state.mirrorView ? '1' : '0'); } catch (err) { /* ignore */ }
     render();
+  }
+
+  async function applyLayout(layoutId) {
+    const formationId = state.currentFormationId;
+    if (!formationId) return;
+    const preset = FORMATION_LAYOUTS.find((p) => p.id === layoutId);
+    if (!preset) return;
+    const dancers = onStageDancers(formationId);
+    if (!dancers.length) return;
+    const points = preset.generate(dancers.length);
+    const list = cache.positions[formationId] || [];
+    for (let i = 0; i < dancers.length; i++) {
+      const dancer = dancers[i];
+      const point = points[i];
+      const pos = getPosition(formationId, dancer.id);
+      const updated = { ...pos, id: pos.id || DB.uid(), formationId, dancerId: dancer.id, x: point.x, y: point.y, offStage: false };
+      await DB.put('positions', updated);
+      const idx = list.findIndex((p) => p.dancerId === dancer.id);
+      if (idx === -1) list.push(updated); else list[idx] = updated;
+    }
+    cache.positions[formationId] = list;
+    state.layoutPickerOpen = false;
+    return render();
   }
 
   // ---------- Dragging dots ----------
@@ -800,6 +1005,13 @@ const Formation = (() => {
           return exitFullscreen();
         case 'toggle-mirror':
           return toggleMirrorView();
+        case 'toggle-layout-picker':
+          state.layoutPickerOpen = !state.layoutPickerOpen;
+          return render();
+        case 'apply-layout': {
+          const layoutId = e.target.closest('[data-layout]').dataset.layout;
+          return applyLayout(layoutId);
+        }
         case 'export-formation-pdf': {
           const routine = cache.routines.find((r) => r.id === state.routineId);
           const doc = generateRoutinePdf(routine);
