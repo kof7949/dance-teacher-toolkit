@@ -661,13 +661,30 @@ const Progress = (() => {
           for (const d of (data.dancers || [])) await DB.put('dancers', d);
           for (const f of (data.formations || [])) await DB.put('formations', f);
           for (const pos of (data.positions || [])) await DB.put('positions', pos);
+
+          // Merge by id rather than overwrite, same as everything above -- a restore
+          // shouldn't wipe out custom Groove patterns built on this device since the backup
+          // was taken.
+          let importedGrooveCount = 0;
+          if (Array.isArray(data.groovePresets) && data.groovePresets.length) {
+            try {
+              const raw = localStorage.getItem('dance-toolkit-groove-custom-presets');
+              const existing = raw ? JSON.parse(raw) : [];
+              const byId = new Map(existing.map((p) => [p.id, p]));
+              for (const p of data.groovePresets) byId.set(p.id, p);
+              localStorage.setItem('dance-toolkit-groove-custom-presets', JSON.stringify([...byId.values()]));
+              importedGrooveCount = data.groovePresets.length;
+            } catch (err) { /* ignore */ }
+          }
+
           await loadAll();
           state.view = 'list';
           await render();
           const out2 = document.getElementById('backup-output');
           if (out2) {
             const dupeNote = removedDupes ? ` (removed ${removedDupes} duplicate skill${removedDupes === 1 ? '' : 's'})` : '';
-            out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s)${dupeNote}.</div>`;
+            const grooveNote = importedGrooveCount ? `, ${importedGrooveCount} groove preset(s)` : '';
+            out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s)${grooveNote}${dupeNote}.</div>`;
           }
         } catch (err) {
           if (out) out.innerHTML = `<div class="summary-box">Import failed: ${escapeHtml(err.message)}</div>`;
@@ -838,11 +855,19 @@ const Progress = (() => {
             DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
             DB.getAll('routines'), DB.getAll('dancers'), DB.getAll('formations'), DB.getAll('positions'),
           ]);
+          // Groove Lab's custom presets live in localStorage (not IndexedDB, like everything
+          // else here), since the Metronome module persists its settings that way -- pull
+          // them in too so a backup/restore doesn't silently lose a built pattern.
+          let groovePresets = [];
+          try {
+            const raw = localStorage.getItem('dance-toolkit-groove-custom-presets');
+            if (raw) groovePresets = JSON.parse(raw);
+          } catch (err) { /* ignore */ }
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 3,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 4,
             exportedAt: new Date().toISOString(),
             skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
-            routines, dancers, formations, positions,
+            routines, dancers, formations, positions, groovePresets,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -852,9 +877,10 @@ const Progress = (() => {
           // browsers require for downloads, so a programmatic click can silently fail there.
           const out2 = document.getElementById('backup-output');
           if (out2) {
+            const grooveNote = groovePresets.length ? `, ${groovePresets.length} groove preset(s)` : '';
             out2.innerHTML = `
               <div class="summary-box">
-                <div style="margin-bottom:10px;">Backup ready: ${students.length} student(s), ${skills.length} skill(s).</div>
+                <div style="margin-bottom:10px;">Backup ready: ${students.length} student(s), ${skills.length} skill(s)${grooveNote}.</div>
                 <a class="btn btn-small" href="${url}" download="${escapeHtml(fileName)}">⬇ Save backup file</a>
               </div>
             `;
