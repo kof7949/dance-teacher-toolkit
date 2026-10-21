@@ -5,7 +5,18 @@ const Formation = (() => {
   const COLORS = ['#a855f7', '#ec4899', '#22d3ee', '#fbbf24', '#34d399', '#f87171', '#60a5fa', '#f472b6', '#fb923c', '#a3e635'];
 
   let root;
-  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false };
+  let state = { view: 'list', routineId: null, currentFormationId: null, newDancerColor: COLORS[0], selectedDancerId: null, playing: false, editingFormationName: false, offStageOpen: false, fullscreenOpen: false, mirrorView: false };
+  const MIRROR_VIEW_KEY = 'dance-toolkit-formation-mirror';
+
+  // A chart drawn in the normal (audience) view has stage-right appear on the LEFT of the
+  // screen, since that's what it looks like from the house looking at the stage. A performer
+  // looking at the same chart while standing on stage facing the audience has to mentally
+  // flip left/right to make sense of it. Mirror view flips the horizontal axis for display
+  // only -- stored x/y (and the PDF export) always stay in the one true audience-view
+  // coordinate system -- so a dancer can read it the same way they'd read their own
+  // reflection. The transform is its own inverse, so the same function also converts a drag's
+  // on-screen x back to the stored coordinate when mirror view is active.
+  function mirrorX(x) { return state.mirrorView ? (100 - x) : x; }
   let cache = { routines: [], dancers: [], formations: [], positions: {} }; // positions keyed by formationId -> array
   let dragInfo = null;
   let playTimer = null;
@@ -83,7 +94,7 @@ const Formation = (() => {
         const selected = state.selectedDancerId === d.id;
         return `
           <div class="dancer-dot ${selected ? 'selected' : ''}" data-dancer-dot="${d.id}"
-               style="left:${pos.x}%; top:${pos.y}%; background:${d.color};" title="${escapeHtml(d.name)}">
+               style="left:${mirrorX(pos.x)}%; top:${pos.y}%; background:${d.color};" title="${escapeHtml(d.name)}">
             <span class="dancer-dot-label">${escapeHtml(d.name)}</span>
           </div>
         `;
@@ -94,8 +105,8 @@ const Formation = (() => {
         <div class="stage" id="stage">
           <div class="stage-label stage-label-up">UPSTAGE</div>
           <div class="stage-label stage-label-down">DOWNSTAGE (audience)</div>
-          <div class="stage-label stage-label-sr">STAGE RIGHT</div>
-          <div class="stage-label stage-label-sl">STAGE LEFT</div>
+          <div class="stage-label stage-label-sr">${state.mirrorView ? 'STAGE LEFT' : 'STAGE RIGHT'}</div>
+          <div class="stage-label stage-label-sl">${state.mirrorView ? 'STAGE RIGHT' : 'STAGE LEFT'}</div>
           <div class="stage-centerline-v"></div>
           <div class="stage-centerline-h"></div>
           ${dots}
@@ -219,6 +230,7 @@ const Formation = (() => {
         <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
           <span>Formations</span>
           <div style="flex:1"></div>
+          ${formation ? `<button class="btn btn-small btn-ghost" data-action="toggle-mirror" title="Flip to the performer's own left/right">${state.mirrorView ? '🪞 Audience view' : '🪞 Performer view'}</button>` : ''}
           ${formation ? '<button class="btn btn-small btn-ghost" data-action="enter-fullscreen" title="Full screen">⛶</button>' : ''}
         </div>
         ${formationStripHtml()}
@@ -274,6 +286,7 @@ const Formation = (() => {
         ${transportRowHtml()}
       </div>
       <div class="fs-side-col">
+        <button class="btn btn-small btn-ghost" data-action="toggle-mirror" title="Flip to the performer's own left/right">${state.mirrorView ? '🪞 Audience view' : '🪞 Performer view'}</button>
         ${formationStripHtml()}
         <div id="formation-header-wrap">${formationHeaderHtml(formation)}</div>
         <div class="tag-label">Tap a dancer dot to add a note for this formation</div>
@@ -333,7 +346,7 @@ const Formation = (() => {
           return;
         }
         if (existingDot) {
-          existingDot.style.left = pos.x + '%';
+          existingDot.style.left = mirrorX(pos.x) + '%';
           existingDot.style.top = pos.y + '%';
           existingDot.classList.remove('selected');
         } else {
@@ -341,7 +354,7 @@ const Formation = (() => {
           div.className = 'dancer-dot';
           div.dataset.dancerDot = d.id;
           div.title = d.name;
-          div.style.left = pos.x + '%';
+          div.style.left = mirrorX(pos.x) + '%';
           div.style.top = pos.y + '%';
           div.style.background = d.color;
           div.innerHTML = `<span class="dancer-dot-label">${escapeHtml(d.name)}</span>`;
@@ -433,6 +446,16 @@ const Formation = (() => {
     render();
   }
 
+  function loadMirrorPref() {
+    try { state.mirrorView = localStorage.getItem(MIRROR_VIEW_KEY) === '1'; } catch (err) { /* ignore */ }
+  }
+
+  function toggleMirrorView() {
+    state.mirrorView = !state.mirrorView;
+    try { localStorage.setItem(MIRROR_VIEW_KEY, state.mirrorView ? '1' : '0'); } catch (err) { /* ignore */ }
+    render();
+  }
+
   // ---------- Dragging dots ----------
 
   // Dragging switches the dot to `position: fixed` (viewport coordinates) for the
@@ -485,7 +508,8 @@ const Formation = (() => {
     let updated;
     if (overStage) {
       const rect = stage.getBoundingClientRect();
-      const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+      const onScreenX = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+      const x = mirrorX(onScreenX); // undo the display flip before storing (mirrorX is its own inverse)
       const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
       updated = { ...pos, id: pos.id || DB.uid(), formationId: state.currentFormationId, dancerId, x, y, offStage: false };
     } else if (overOffstage) {
@@ -770,6 +794,8 @@ const Formation = (() => {
           return enterFullscreen();
         case 'exit-fullscreen':
           return exitFullscreen();
+        case 'toggle-mirror':
+          return toggleMirrorView();
         case 'export-formation-pdf': {
           const routine = cache.routines.find((r) => r.id === state.routineId);
           const doc = generateRoutinePdf(routine);
@@ -823,6 +849,7 @@ const Formation = (() => {
 
   async function init() {
     root = document.getElementById('formation-root');
+    loadMirrorPref();
     wireEvents();
     await loadRoutines();
   }
