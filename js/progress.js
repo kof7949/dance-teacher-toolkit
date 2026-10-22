@@ -568,6 +568,20 @@ const Progress = (() => {
     `;
   }
 
+  // Roughly the first 2 sentences, so a collapsed note still gives a sense of what it's
+  // about. Falls back to a plain character cut (with an ellipsis) for a body that runs on
+  // without sentence-ending punctuation for too long.
+  function referencePreviewText(body, maxLen = 160) {
+    const normalized = body.replace(/\s+/g, ' ').trim();
+    const sentenceEnds = [...normalized.matchAll(/[.!?](?:\s|$)/g)];
+    if (sentenceEnds.length >= 2) {
+      const cut = sentenceEnds[1].index + 1;
+      if (cut <= maxLen + 40) return normalized.slice(0, cut).trim();
+    }
+    if (normalized.length <= maxLen) return normalized;
+    return normalized.slice(0, maxLen).trim() + '…';
+  }
+
   function referenceRowsHtml(query) {
     const q = (query || '').trim().toLowerCase();
     const filtered = q
@@ -586,18 +600,17 @@ const Progress = (() => {
         ${groups[cat].map((r) => {
           if (r.id === state.editingReferenceId) return referenceEditFormHtml(r);
           const expanded = state.expandedReferenceIds.has(r.id);
+          const bodyText = expanded ? r.body : referencePreviewText(r.body);
           return `
             <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                <div style="flex:1;cursor:pointer;" data-toggle-reference="${r.id}">
-                  <div class="name">${expanded ? '▾' : '▸'} ${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
-                </div>
+                <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
                 <div style="display:flex;gap:4px;flex-shrink:0;">
                   <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
                   <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
                 </div>
               </div>
-              ${expanded ? `<div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>` : ''}
+              <div class="sub" style="white-space:pre-wrap;cursor:pointer;" data-toggle-reference="${r.id}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'} ${escapeHtml(bodyText)}</div>
             </div>
           `;
         }).join('')}
