@@ -357,6 +357,15 @@ main {
   white-space: pre-wrap; margin-top: 12px;
 }
 
+.training-tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+.training-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  aspect-ratio: 1 / 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 10px; color: var(--text);
+}
+.training-tile-icon { font-size: 1.8rem; }
+.training-tile-label { font-size: 0.78rem; text-align: center; color: var(--text-dim); }
+
 .empty-state { color: var(--text-dim); font-size: 0.85rem; text-align: center; padding: 30px 10px; }
 
 .back-to-top {

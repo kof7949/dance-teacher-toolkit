@@ -422,7 +422,46 @@ const Progress = (() => {
     `;
   }
 
-  function renderTrainingHome() {
+  function renderTrainingGrid() {
+    const tiles = [
+      { id: 'goals', icon: '🎯', label: 'Goals' },
+      { id: 'skills', icon: '🧑‍🏫', label: 'My Skills' },
+      { id: 'journal', icon: '📓', label: 'Training Journal' },
+    ];
+    const tilesHtml = tiles.map((t) => `
+      <button class="training-tile" data-training-tile="${t.id}">
+        <span class="training-tile-icon">${t.icon}</span>
+        <span class="training-tile-label">${t.label}</span>
+      </button>
+    `).join('');
+
+    return `
+      ${modeToggleHtml()}
+      <div class="training-tile-grid">${tilesHtml}</div>
+      ${globalSettingsCardsHtml()}
+    `;
+  }
+
+  function renderTrainingGoals() {
+    const goalsHtml = cache.trainingGoals.length
+      ? sortedTrainingGoals().map(goalCardHtml).join('')
+      : '<div class="empty-state">No goals yet. Set one below.</div>';
+
+    return `
+      <div class="back-row">
+        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
+      </div>
+      <div class="section-title" style="margin-top:0;">🎯 Goals</div>
+      <div class="student-list">${goalsHtml}</div>
+      <div class="add-row" style="margin-top:12px;">
+        <input type="text" id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" />
+        <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
+      </div>
+      <button class="btn btn-small" data-action="add-goal">Add goal</button>
+    `;
+  }
+
+  function renderTrainingSkills() {
     const groups = groupTrainingSkillsByCategory();
     const catNames = Object.keys(groups);
     const skillsHtml = catNames.length
@@ -454,6 +493,19 @@ const Progress = (() => {
         }).join('')
       : '<div class="empty-state">No updates logged yet.</div>';
 
+    return `
+      <div class="back-row">
+        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
+      </div>
+      <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
+      ${skillsHtml}
+      <button class="btn btn-text" data-action="training-manage-skills" style="margin-top:8px;">Edit my skills checklist</button>
+      <div class="section-title">Recent updates</div>
+      <div class="summary-box">${historyHtml}</div>
+    `;
+  }
+
+  function renderTrainingJournal() {
     const journalHtml = cache.trainingJournal.length
       ? cache.trainingJournal.map((j) => `
           <div class="student-card">
@@ -466,37 +518,16 @@ const Progress = (() => {
         `).join('')
       : '<div class="empty-state">No journal entries yet. Log what you worked on above.</div>';
 
-    const goalsHtml = cache.trainingGoals.length
-      ? sortedTrainingGoals().map(goalCardHtml).join('')
-      : '<div class="empty-state">No goals yet. Set one below.</div>';
-
     return `
-      ${modeToggleHtml()}
-      <div class="card">
-        <div class="section-title" style="margin-top:0;">🎯 Goals</div>
-        <div class="student-list">${goalsHtml}</div>
-        <div class="add-row" style="margin-top:12px;">
-          <input type="text" id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" />
-          <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
-        </div>
-        <button class="btn btn-small" data-action="add-goal">Add goal</button>
+      <div class="back-row">
+        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
-      <div class="card">
-        <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
-        ${skillsHtml}
-        <button class="btn btn-text" data-action="training-manage-skills" style="margin-top:8px;">Edit my skills checklist</button>
-        <div class="section-title">Recent updates</div>
-        <div class="summary-box">${historyHtml}</div>
+      <div class="section-title" style="margin-top:0;">📓 Training Journal</div>
+      <div class="add-row">
+        <input type="text" id="training-journal-input" placeholder="What did you work on today?" />
       </div>
-      <div class="card">
-        <div class="section-title" style="margin-top:0;">📓 Training Journal</div>
-        <div class="add-row">
-          <input type="text" id="training-journal-input" placeholder="What did you work on today?" />
-        </div>
-        <button class="btn btn-small" data-action="add-journal-entry" style="margin-bottom:12px;">Add entry</button>
-        <div class="student-list">${journalHtml}</div>
-      </div>
-      ${globalSettingsCardsHtml()}
+      <button class="btn btn-small" data-action="add-journal-entry" style="margin-bottom:12px;">Add entry</button>
+      <div class="student-list">${journalHtml}</div>
     `;
   }
 
@@ -521,7 +552,7 @@ const Progress = (() => {
 
     return `
       <div class="back-row">
-        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
+        <button class="btn btn-small" data-action="training-back-to-skills">← Back</button>
       </div>
       <div class="section-title">Edit my skills checklist</div>
       <div class="add-row">
@@ -543,7 +574,10 @@ const Progress = (() => {
 
   function renderTrainingMode() {
     if (state.trainingView === 'manage-skills') return renderTrainingManageSkills();
-    return renderTrainingHome();
+    if (state.trainingView === 'goals') return renderTrainingGoals();
+    if (state.trainingView === 'skills') return renderTrainingSkills();
+    if (state.trainingView === 'journal') return renderTrainingJournal();
+    return renderTrainingGrid();
   }
 
   async function render() {
@@ -958,6 +992,7 @@ const Progress = (() => {
       const toggleStyleBtn = e.target.closest('[data-toggle-style]');
       const manageStyleBtn = e.target.closest('[data-manage-style]');
       const progressModeBtn = e.target.closest('[data-progress-mode]');
+      const trainingTile = e.target.closest('[data-training-tile]')?.dataset.trainingTile;
       const setTrainingLevelAttr = e.target.closest('[data-set-training-level]')?.dataset.setTrainingLevel;
       const delTrainingSkillId = e.target.closest('[data-del-training-skill]')?.dataset.delTrainingSkill;
       const delJournalId = e.target.closest('[data-del-journal]')?.dataset.delJournal;
@@ -1008,6 +1043,10 @@ const Progress = (() => {
       if (progressModeBtn) {
         state.mode = progressModeBtn.dataset.progressMode;
         try { localStorage.setItem(PROGRESS_MODE_KEY, state.mode); } catch (err) { /* ignore */ }
+        return render();
+      }
+      if (trainingTile) {
+        state.trainingView = trainingTile;
         return render();
       }
       if (setTrainingLevelAttr) {
@@ -1145,6 +1184,9 @@ const Progress = (() => {
           return render();
         case 'training-back-to-home':
           state.trainingView = 'home';
+          return render();
+        case 'training-back-to-skills':
+          state.trainingView = 'skills';
           return render();
         case 'add-training-skill': {
           const catSelect = document.getElementById('new-training-skill-category-select');
