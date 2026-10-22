@@ -1,4 +1,4 @@
-const CACHE_NAME = 'dance-toolkit-v89';
+const CACHE_NAME = 'dance-toolkit-v90';
 const ASSETS = [
   './',
   './index.html',

@@ -41,6 +41,13 @@ const Progress = (() => {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
 
+  // Goal target dates can be set far out (next year, etc.), so unlike journal/history
+  // timestamps the year matters here to avoid ambiguity.
+  function fmtDateWithYear(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   function styleBadges(styles) {
     if (!styles || !styles.length) return '<span class="sub">No style set</span>';
     return styles.map((s) => `<span class="sub">${escapeHtml(styleMeta(s).emoji)} ${escapeHtml(styleMeta(s).label)}</span>`).join(' ');
@@ -406,7 +413,7 @@ const Progress = (() => {
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div>
             <div class="name" style="${titleStyle}">${escapeHtml(goal.title)}</div>
-            ${goal.targetDate ? `<div class="sub">Target: ${fmtDate(goal.targetDate)}</div>` : ''}
+            ${goal.targetDate ? `<div class="sub">Target: ${fmtDateWithYear(goal.targetDate)}</div>` : ''}
           </div>
           <div style="display:flex;gap:6px;flex-shrink:0;">
             ${!total ? `<button class="btn btn-small" data-toggle-goal-complete="${goal.id}">${complete ? '↺ Reopen' : '✓ Mark complete'}</button>` : ''}
