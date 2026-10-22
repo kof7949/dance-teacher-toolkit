@@ -324,26 +324,27 @@ main {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 12px; padding: 12px 14px;
 }
-.student-card .name { font-weight: 600; }
+.student-card .name { font-weight: 600; white-space: pre-wrap; }
 .student-card .sub { color: var(--text-dim); font-size: 0.78rem; margin-top: 2px; }
 
-.add-row { display: flex; gap: 8px; margin-bottom: 14px; }
-.add-row input {
+.add-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: flex-end; }
+.add-row input, .add-row textarea {
   flex: 1; background: var(--surface-2); border: 1px solid var(--border);
   color: var(--text); border-radius: 10px; padding: 10px; font-size: 0.9rem;
 }
+.add-row textarea { font-family: inherit; line-height: 1.4; resize: vertical; min-height: 40px; }
 
 .section-title { font-size: 0.95rem; font-weight: 700; margin: 18px 0 8px; }
 .back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 
 .skill-category { margin-bottom: 16px; }
-.skill-category h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--accent-2); }
+.skill-category h4 { margin: 0 0 8px; font-size: 0.85rem; color: var(--accent-2); white-space: pre-wrap; }
 .skill-row {
   display: flex; flex-direction: column; gap: 6px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
 }
-.skill-row .skill-name { font-size: 0.88rem; }
+.skill-row .skill-name { font-size: 0.88rem; white-space: pre-wrap; }
 .level-segment { display: flex; gap: 6px; }
 .level-btn {
   flex: 1; text-align: center; padding: 7px 4px; font-size: 0.72rem;

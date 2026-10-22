@@ -394,7 +394,7 @@ const Progress = (() => {
       ${goal.milestones.map((m) => `
         <label style="display:flex;align-items:center;gap:8px;padding:4px 0;">
           <input type="checkbox" data-toggle-milestone="${goal.id}:${m.id}" ${m.done ? 'checked' : ''} />
-          <span style="flex:1;${m.done ? 'text-decoration:line-through;color:var(--text-dim);' : ''}">${escapeHtml(m.text)}</span>
+          <span style="flex:1;white-space:pre-wrap;${m.done ? 'text-decoration:line-through;color:var(--text-dim);' : ''}">${escapeHtml(m.text)}</span>
           <button class="dancer-chip-del" data-del-milestone="${goal.id}:${m.id}" title="Remove milestone">✕</button>
         </label>
       `).join('')}
@@ -415,7 +415,7 @@ const Progress = (() => {
         </div>
         ${milestonesHtml}
         <div class="add-row" style="margin-bottom:0;">
-          <input type="text" id="milestone-input-${goal.id}" placeholder="Add a milestone…" />
+          <textarea id="milestone-input-${goal.id}" placeholder="Add a milestone…" rows="1"></textarea>
           <button class="btn btn-small" data-add-milestone="${goal.id}">+</button>
         </div>
       </div>
@@ -454,7 +454,7 @@ const Progress = (() => {
       <div class="section-title" style="margin-top:0;">🎯 Goals</div>
       <div class="student-list">${goalsHtml}</div>
       <div class="add-row" style="margin-top:12px;">
-        <input type="text" id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" />
+        <textarea id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" rows="1"></textarea>
         <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
       </div>
       <button class="btn btn-small" data-action="add-goal">Add goal</button>
@@ -524,7 +524,7 @@ const Progress = (() => {
       </div>
       <div class="section-title" style="margin-top:0;">📓 Training Journal</div>
       <div class="add-row">
-        <input type="text" id="training-journal-input" placeholder="What did you work on today?" />
+        <textarea id="training-journal-input" placeholder="What did you work on today?" rows="3"></textarea>
       </div>
       <button class="btn btn-small" data-action="add-journal-entry" style="margin-bottom:12px;">Add entry</button>
       <div class="student-list">${journalHtml}</div>
@@ -560,11 +560,11 @@ const Progress = (() => {
           ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
           <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
         </select>
-        <input type="text" id="new-training-skill-name" placeholder="Skill or concept name" />
+        <textarea id="new-training-skill-name" placeholder="Skill or concept name" rows="1"></textarea>
       </div>
       ${selectedCatValue === '__new__' ? `
         <div class="add-row">
-          <input type="text" id="new-training-skill-category-new" placeholder="New category name" />
+          <textarea id="new-training-skill-category-new" placeholder="New category name" rows="1"></textarea>
         </div>
       ` : ''}
       <button class="btn btn-small" data-action="add-training-skill" style="margin-bottom:16px;">Add skill</button>
