@@ -496,7 +496,7 @@ const Progress = (() => {
       ? cache.trainingHistory.map((h) => {
           const skill = cache.trainingSkills.find((s) => s.id === h.skillId);
           const levelLabel = LEVELS.find((l) => l.value === h.level)?.label || h.level;
-          return `<div>${fmtDate(h.date)} — ${escapeHtml(skill ? skill.name : 'Skill')}: <b>${levelLabel}</b></div>`;
+          return `<div>${fmtDateWithYear(h.date)} — ${escapeHtml(skill ? skill.name : 'Skill')}: <b>${levelLabel}</b></div>`;
         }).join('')
       : '<div class="empty-state">No updates logged yet.</div>';
 
@@ -517,7 +517,7 @@ const Progress = (() => {
       ? cache.trainingJournal.map((j) => `
           <div class="student-card">
             <div>
-              <div class="sub">${fmtDate(j.date)}</div>
+              <div class="sub">${fmtDateWithYear(j.date)}</div>
               <div class="name">${escapeHtml(j.text)}</div>
             </div>
             <button class="dancer-chip-del" data-del-journal="${j.id}" title="Delete entry">✕</button>
