@@ -14,10 +14,11 @@ const Progress = (() => {
   let state = {
     view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
+    trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
-    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [], trainingGoals: [],
+    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [], trainingGoals: [], trainingReferences: [],
   };
 
   function styleIds() { return cache.styles.map((s) => s.id); }
@@ -86,6 +87,7 @@ const Progress = (() => {
     cache.trainingHistory = history.sort((a, b) => b.date - a.date).slice(0, 8);
     cache.trainingJournal = (await DB.getAll('trainingJournal')).sort((a, b) => b.date - a.date);
     cache.trainingGoals = (await DB.getAll('trainingGoals')).sort((a, b) => a.order - b.order);
+    cache.trainingReferences = (await DB.getAll('trainingReferences')).sort((a, b) => a.order - b.order);
   }
 
   function isGoalComplete(goal) {
@@ -434,6 +436,7 @@ const Progress = (() => {
       { id: 'goals', icon: '🎯', label: 'Goals' },
       { id: 'skills', icon: '🧑‍🏫', label: 'My Skills' },
       { id: 'journal', icon: '📓', label: 'Training Journal' },
+      { id: 'reference', icon: '📚', label: 'Reference' },
     ];
     const tilesHtml = tiles.map((t) => `
       <button class="training-tile" data-training-tile="${t.id}">
@@ -538,6 +541,71 @@ const Progress = (() => {
     `;
   }
 
+  function referenceRowsHtml(query) {
+    const q = (query || '').trim().toLowerCase();
+    const filtered = q
+      ? cache.trainingReferences.filter((r) => r.title.toLowerCase().includes(q) || r.body.toLowerCase().includes(q) || r.category.toLowerCase().includes(q))
+      : cache.trainingReferences;
+    if (!filtered.length) {
+      return q
+        ? `<div class="empty-state">No notes match "${escapeHtml(query)}".</div>`
+        : '<div class="empty-state">No reference notes yet. Add one below.</div>';
+    }
+    const groups = {};
+    filtered.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
+    return Object.keys(groups).map((cat) => `
+      <div class="skill-category">
+        <h4>${escapeHtml(cat)}</h4>
+        ${groups[cat].map((r) => `
+          <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+              <div class="name">${escapeHtml(r.title)}</div>
+              <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
+            </div>
+            <div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+  }
+
+  function renderTrainingReference() {
+    const catNames = [...new Set(cache.trainingReferences.map((r) => r.category))];
+    const selectedCatValue = (state.trainingReferenceNewCategoryValue && (catNames.includes(state.trainingReferenceNewCategoryValue) || state.trainingReferenceNewCategoryValue === '__new__'))
+      ? state.trainingReferenceNewCategoryValue
+      : (catNames[0] || '__new__');
+
+    return `
+      <div class="back-row">
+        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
+      </div>
+      <div class="section-title" style="margin-top:0;">📚 Reference</div>
+      <div class="add-row">
+        <input type="text" id="reference-search" placeholder="🔍 Search your notes…" value="${escapeHtml(state.trainingReferenceSearchQuery || '')}" />
+      </div>
+      <div id="reference-list-container">${referenceRowsHtml(state.trainingReferenceSearchQuery)}</div>
+      <div class="section-title">Add a note</div>
+      <div class="add-row">
+        <textarea id="new-reference-title" placeholder="Title, e.g. 'Spotting cue for turns'" rows="1"></textarea>
+      </div>
+      <div class="add-row">
+        <select id="new-reference-category-select" class="song-select" style="flex:0 0 45%">
+          ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
+        </select>
+      </div>
+      ${selectedCatValue === '__new__' ? `
+        <div class="add-row">
+          <textarea id="new-reference-category-new" placeholder="New category name" rows="1"></textarea>
+        </div>
+      ` : ''}
+      <div class="add-row">
+        <textarea id="new-reference-body" placeholder="The note itself…" rows="3"></textarea>
+      </div>
+      <button class="btn btn-small" data-action="add-reference" style="margin-bottom:16px;">Add note</button>
+    `;
+  }
+
   function renderTrainingManageSkills() {
     const groups = groupTrainingSkillsByCategory();
     const catNames = Object.keys(groups);
@@ -584,6 +652,7 @@ const Progress = (() => {
     if (state.trainingView === 'goals') return renderTrainingGoals();
     if (state.trainingView === 'skills') return renderTrainingSkills();
     if (state.trainingView === 'journal') return renderTrainingJournal();
+    if (state.trainingView === 'reference') return renderTrainingReference();
     return renderTrainingGrid();
   }
 
@@ -892,10 +961,17 @@ const Progress = (() => {
     });
 
     root.addEventListener('input', (e) => {
-      if (e.target.id !== 'student-search') return;
-      state.studentSearchQuery = e.target.value;
-      const container = document.getElementById('student-list-container');
-      if (container) container.innerHTML = studentRowsHtml(state.studentSearchQuery);
+      if (e.target.id === 'student-search') {
+        state.studentSearchQuery = e.target.value;
+        const container = document.getElementById('student-list-container');
+        if (container) container.innerHTML = studentRowsHtml(state.studentSearchQuery);
+        return;
+      }
+      if (e.target.id === 'reference-search') {
+        state.trainingReferenceSearchQuery = e.target.value;
+        const container = document.getElementById('reference-list-container');
+        if (container) container.innerHTML = referenceRowsHtml(state.trainingReferenceSearchQuery);
+      }
     });
 
     root.addEventListener('change', async (e) => {
@@ -907,6 +983,10 @@ const Progress = (() => {
       if (e.target.id === 'new-training-skill-category-select') {
         state.trainingNewSkillCategoryValue = e.target.value;
         state.trainingAddingNewCategory = e.target.value === '__new__';
+        render();
+      }
+      if (e.target.id === 'new-reference-category-select') {
+        state.trainingReferenceNewCategoryValue = e.target.value;
         render();
       }
       if (e.target.id === 'import-backup-file') {
@@ -956,6 +1036,7 @@ const Progress = (() => {
           for (const h of (data.trainingHistory || [])) await DB.put('trainingHistory', h);
           for (const j of (data.trainingJournal || [])) await DB.put('trainingJournal', j);
           for (const g of (data.trainingGoals || [])) await DB.put('trainingGoals', g);
+          for (const r of (data.trainingReferences || [])) await DB.put('trainingReferences', r);
 
           // Merge by id rather than overwrite, same as everything above -- a restore
           // shouldn't wipe out custom Groove patterns built on this device since the backup
@@ -1008,6 +1089,7 @@ const Progress = (() => {
       const addMilestoneGoalId = e.target.closest('[data-add-milestone]')?.dataset.addMilestone;
       const delGoalId = e.target.closest('[data-del-goal]')?.dataset.delGoal;
       const toggleGoalCompleteId = e.target.closest('[data-toggle-goal-complete]')?.dataset.toggleGoalComplete;
+      const delReferenceId = e.target.closest('[data-del-reference]')?.dataset.delReference;
 
       if (toggleMilestoneAttr) {
         const [goalId, milestoneId] = toggleMilestoneAttr.split(':');
@@ -1072,6 +1154,11 @@ const Progress = (() => {
       if (delJournalId) {
         if (!confirm('Delete this journal entry?')) return;
         await DB.delete('trainingJournal', delJournalId);
+        return render();
+      }
+      if (delReferenceId) {
+        if (!confirm('Delete this note?')) return;
+        await DB.delete('trainingReferences', delReferenceId);
         return render();
       }
       if (manageStyleBtn) {
@@ -1217,6 +1304,23 @@ const Progress = (() => {
           await DB.put('trainingJournal', { id: DB.uid(), date: Date.now(), text });
           return render();
         }
+        case 'add-reference': {
+          const titleInput = document.getElementById('new-reference-title');
+          const bodyInput = document.getElementById('new-reference-body');
+          const catSelect = document.getElementById('new-reference-category-select');
+          const title = titleInput.value.trim();
+          const body = bodyInput.value.trim();
+          if (!title || !body) return;
+          let category = catSelect.value;
+          if (category === '__new__') {
+            const newCatInput = document.getElementById('new-reference-category-new');
+            category = (newCatInput ? newCatInput.value.trim() : '');
+            if (!category) return;
+          }
+          await DB.put('trainingReferences', { id: DB.uid(), title, body, category, order: cache.trainingReferences.length, createdAt: Date.now() });
+          state.trainingReferenceNewCategoryValue = category;
+          return render();
+        }
         case 'add-goal': {
           const titleInput = document.getElementById('new-goal-title');
           const dateInput = document.getElementById('new-goal-date');
@@ -1273,10 +1377,10 @@ const Progress = (() => {
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
-          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions, trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals] = await Promise.all([
+          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions, trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals, trainingReferences] = await Promise.all([
             DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
             DB.getAll('routines'), DB.getAll('dancers'), DB.getAll('formations'), DB.getAll('positions'),
-            DB.getAll('trainingSkills'), DB.getAll('trainingProgress'), DB.getAll('trainingHistory'), DB.getAll('trainingJournal'), DB.getAll('trainingGoals'),
+            DB.getAll('trainingSkills'), DB.getAll('trainingProgress'), DB.getAll('trainingHistory'), DB.getAll('trainingJournal'), DB.getAll('trainingGoals'), DB.getAll('trainingReferences'),
           ]);
           // Groove Lab's custom presets live in localStorage (not IndexedDB, like everything
           // else here), since the Metronome module persists its settings that way -- pull
@@ -1287,11 +1391,11 @@ const Progress = (() => {
             if (raw) groovePresets = JSON.parse(raw);
           } catch (err) { /* ignore */ }
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 6,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 7,
             exportedAt: new Date().toISOString(),
             skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
             routines, dancers, formations, positions, groovePresets,
-            trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals,
+            trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals, trainingReferences,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
