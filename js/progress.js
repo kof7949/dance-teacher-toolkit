@@ -17,7 +17,7 @@ const Progress = (() => {
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
-    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [],
+    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [], trainingGoals: [],
   };
 
   function styleIds() { return cache.styles.map((s) => s.id); }
@@ -78,6 +78,22 @@ const Progress = (() => {
     const history = await DB.getAll('trainingHistory');
     cache.trainingHistory = history.sort((a, b) => b.date - a.date).slice(0, 8);
     cache.trainingJournal = (await DB.getAll('trainingJournal')).sort((a, b) => b.date - a.date);
+    cache.trainingGoals = (await DB.getAll('trainingGoals')).sort((a, b) => a.order - b.order);
+  }
+
+  function isGoalComplete(goal) {
+    return goal.milestones.length ? goal.milestones.every((m) => m.done) : !!goal.completed;
+  }
+
+  // Incomplete goals first (soonest target date first, undated goals last among them),
+  // completed goals sink to the bottom (most recently created first) rather than vanishing.
+  function sortedTrainingGoals() {
+    const incomplete = [];
+    const complete = [];
+    cache.trainingGoals.forEach((g) => (isGoalComplete(g) ? complete : incomplete).push(g));
+    incomplete.sort((a, b) => (a.targetDate ?? Infinity) - (b.targetDate ?? Infinity) || a.createdAt - b.createdAt);
+    complete.sort((a, b) => b.createdAt - a.createdAt);
+    return incomplete.concat(complete);
   }
 
   // Groups trainingSkills by category only (no per-style dimension -- there's one "trainee").
@@ -366,6 +382,46 @@ const Progress = (() => {
     `;
   }
 
+  function goalCardHtml(goal) {
+    const complete = isGoalComplete(goal);
+    const total = goal.milestones.length;
+    const done = goal.milestones.filter((m) => m.done).length;
+    const titleStyle = complete ? 'text-decoration:line-through;color:var(--text-dim);' : '';
+    const milestonesHtml = total ? `
+      <div style="height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin:4px 0;">
+        <div style="height:100%;width:${Math.round((done / total) * 100)}%;background:var(--accent);"></div>
+      </div>
+      ${goal.milestones.map((m) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+          <input type="checkbox" data-toggle-milestone="${goal.id}:${m.id}" ${m.done ? 'checked' : ''} />
+          <span style="flex:1;${m.done ? 'text-decoration:line-through;color:var(--text-dim);' : ''}">${escapeHtml(m.text)}</span>
+          <button class="dancer-chip-del" data-del-milestone="${goal.id}:${m.id}" title="Remove milestone">✕</button>
+        </label>
+      `).join('')}
+      <div class="sub">${done}/${total} milestones</div>
+    ` : '';
+
+    return `
+      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div>
+            <div class="name" style="${titleStyle}">${escapeHtml(goal.title)}</div>
+            ${goal.targetDate ? `<div class="sub">Target: ${fmtDate(goal.targetDate)}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            ${!total ? `<button class="btn btn-small" data-toggle-goal-complete="${goal.id}">${complete ? '↺ Reopen' : '✓ Mark complete'}</button>` : ''}
+            <button class="dancer-chip-del" data-del-goal="${goal.id}" title="Delete goal">✕</button>
+          </div>
+        </div>
+        ${milestonesHtml}
+        <div class="add-row" style="margin-bottom:0;">
+          <input type="text" id="milestone-input-${goal.id}" placeholder="Add a milestone…" />
+          <button class="btn btn-small" data-add-milestone="${goal.id}">+</button>
+        </div>
+      </div>
+    `;
+  }
+
   function renderTrainingHome() {
     const groups = groupTrainingSkillsByCategory();
     const catNames = Object.keys(groups);
@@ -410,8 +466,21 @@ const Progress = (() => {
         `).join('')
       : '<div class="empty-state">No journal entries yet. Log what you worked on above.</div>';
 
+    const goalsHtml = cache.trainingGoals.length
+      ? sortedTrainingGoals().map(goalCardHtml).join('')
+      : '<div class="empty-state">No goals yet. Set one below.</div>';
+
     return `
       ${modeToggleHtml()}
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">🎯 Goals</div>
+        <div class="student-list">${goalsHtml}</div>
+        <div class="add-row" style="margin-top:12px;">
+          <input type="text" id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" />
+          <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
+        </div>
+        <button class="btn btn-small" data-action="add-goal">Add goal</button>
+      </div>
       <div class="card">
         <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
         ${skillsHtml}
@@ -845,6 +914,7 @@ const Progress = (() => {
           for (const p of (data.trainingProgress || [])) await DB.put('trainingProgress', p);
           for (const h of (data.trainingHistory || [])) await DB.put('trainingHistory', h);
           for (const j of (data.trainingJournal || [])) await DB.put('trainingJournal', j);
+          for (const g of (data.trainingGoals || [])) await DB.put('trainingGoals', g);
 
           // Merge by id rather than overwrite, same as everything above -- a restore
           // shouldn't wipe out custom Groove patterns built on this device since the backup
@@ -891,7 +961,50 @@ const Progress = (() => {
       const setTrainingLevelAttr = e.target.closest('[data-set-training-level]')?.dataset.setTrainingLevel;
       const delTrainingSkillId = e.target.closest('[data-del-training-skill]')?.dataset.delTrainingSkill;
       const delJournalId = e.target.closest('[data-del-journal]')?.dataset.delJournal;
+      const toggleMilestoneAttr = e.target.closest('[data-toggle-milestone]')?.dataset.toggleMilestone;
+      const delMilestoneAttr = e.target.closest('[data-del-milestone]')?.dataset.delMilestone;
+      const addMilestoneGoalId = e.target.closest('[data-add-milestone]')?.dataset.addMilestone;
+      const delGoalId = e.target.closest('[data-del-goal]')?.dataset.delGoal;
+      const toggleGoalCompleteId = e.target.closest('[data-toggle-goal-complete]')?.dataset.toggleGoalComplete;
 
+      if (toggleMilestoneAttr) {
+        const [goalId, milestoneId] = toggleMilestoneAttr.split(':');
+        const goal = cache.trainingGoals.find((g) => g.id === goalId);
+        const milestone = goal?.milestones.find((m) => m.id === milestoneId);
+        if (!milestone) return;
+        milestone.done = !milestone.done;
+        await DB.put('trainingGoals', goal);
+        return render();
+      }
+      if (delMilestoneAttr) {
+        const [goalId, milestoneId] = delMilestoneAttr.split(':');
+        const goal = cache.trainingGoals.find((g) => g.id === goalId);
+        if (!goal) return;
+        goal.milestones = goal.milestones.filter((m) => m.id !== milestoneId);
+        await DB.put('trainingGoals', goal);
+        return render();
+      }
+      if (addMilestoneGoalId) {
+        const goal = cache.trainingGoals.find((g) => g.id === addMilestoneGoalId);
+        const input = document.getElementById(`milestone-input-${addMilestoneGoalId}`);
+        const text = input ? input.value.trim() : '';
+        if (!goal || !text) return;
+        goal.milestones.push({ id: DB.uid(), text, done: false });
+        await DB.put('trainingGoals', goal);
+        return render();
+      }
+      if (delGoalId) {
+        if (!confirm('Delete this goal and its milestones?')) return;
+        await DB.delete('trainingGoals', delGoalId);
+        return render();
+      }
+      if (toggleGoalCompleteId) {
+        const goal = cache.trainingGoals.find((g) => g.id === toggleGoalCompleteId);
+        if (!goal) return;
+        goal.completed = !goal.completed;
+        await DB.put('trainingGoals', goal);
+        return render();
+      }
       if (progressModeBtn) {
         state.mode = progressModeBtn.dataset.progressMode;
         try { localStorage.setItem(PROGRESS_MODE_KEY, state.mode); } catch (err) { /* ignore */ }
@@ -1055,6 +1168,24 @@ const Progress = (() => {
           await DB.put('trainingJournal', { id: DB.uid(), date: Date.now(), text });
           return render();
         }
+        case 'add-goal': {
+          const titleInput = document.getElementById('new-goal-title');
+          const dateInput = document.getElementById('new-goal-date');
+          const title = titleInput.value.trim();
+          if (!title) return;
+          // new Date('YYYY-MM-DD') parses as UTC midnight, which can display as the previous
+          // day in negative-UTC-offset timezones -- build it from local-time parts instead.
+          let targetDate = null;
+          if (dateInput.value) {
+            const [y, m, d] = dateInput.value.split('-').map(Number);
+            targetDate = new Date(y, m - 1, d).getTime();
+          }
+          await DB.put('trainingGoals', {
+            id: DB.uid(), title, targetDate, completed: false, milestones: [],
+            order: cache.trainingGoals.length, createdAt: Date.now(),
+          });
+          return render();
+        }
         case 'add-style': {
           const labelInput = document.getElementById('new-style-label');
           const emojiInput = document.getElementById('new-style-emoji');
@@ -1093,10 +1224,10 @@ const Progress = (() => {
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
-          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions, trainingSkills, trainingProgress, trainingHistory, trainingJournal] = await Promise.all([
+          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions, trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals] = await Promise.all([
             DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
             DB.getAll('routines'), DB.getAll('dancers'), DB.getAll('formations'), DB.getAll('positions'),
-            DB.getAll('trainingSkills'), DB.getAll('trainingProgress'), DB.getAll('trainingHistory'), DB.getAll('trainingJournal'),
+            DB.getAll('trainingSkills'), DB.getAll('trainingProgress'), DB.getAll('trainingHistory'), DB.getAll('trainingJournal'), DB.getAll('trainingGoals'),
           ]);
           // Groove Lab's custom presets live in localStorage (not IndexedDB, like everything
           // else here), since the Metronome module persists its settings that way -- pull
@@ -1107,11 +1238,11 @@ const Progress = (() => {
             if (raw) groovePresets = JSON.parse(raw);
           } catch (err) { /* ignore */ }
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 5,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 6,
             exportedAt: new Date().toISOString(),
             skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
             routines, dancers, formations, positions, groovePresets,
-            trainingSkills, trainingProgress, trainingHistory, trainingJournal,
+            trainingSkills, trainingProgress, trainingHistory, trainingJournal, trainingGoals,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
