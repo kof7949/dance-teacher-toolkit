@@ -15,6 +15,7 @@ const Progress = (() => {
     view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
+    editingReferenceId: null, editingReferenceCategoryValue: '',
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -541,6 +542,32 @@ const Progress = (() => {
     `;
   }
 
+  function referenceCategoryNames() {
+    return [...new Set(cache.trainingReferences.map((r) => r.category))];
+  }
+
+  function referenceEditFormHtml(r) {
+    const catNames = referenceCategoryNames();
+    const selectedCatValue = (state.editingReferenceCategoryValue && (catNames.includes(state.editingReferenceCategoryValue) || state.editingReferenceCategoryValue === '__new__'))
+      ? state.editingReferenceCategoryValue
+      : r.category;
+    return `
+      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <textarea id="edit-reference-title" rows="1">${escapeHtml(r.title)}</textarea>
+        <select id="edit-reference-category-select" class="song-select">
+          ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
+        </select>
+        ${selectedCatValue === '__new__' ? `<textarea id="edit-reference-category-new" placeholder="New category name" rows="1"></textarea>` : ''}
+        <textarea id="edit-reference-body" rows="3">${escapeHtml(r.body)}</textarea>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-small" data-action="save-reference-edit" data-id="${r.id}">Save</button>
+          <button class="btn btn-small btn-text" data-action="cancel-reference-edit">Cancel</button>
+        </div>
+      </div>
+    `;
+  }
+
   function referenceRowsHtml(query) {
     const q = (query || '').trim().toLowerCase();
     const filtered = q
@@ -556,21 +583,26 @@ const Progress = (() => {
     return Object.keys(groups).map((cat) => `
       <div class="skill-category">
         <h4>${escapeHtml(cat)}</h4>
-        ${groups[cat].map((r) => `
-          <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-              <div class="name">${escapeHtml(r.title)}</div>
-              <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
+        ${groups[cat].map((r) => (
+          r.id === state.editingReferenceId ? referenceEditFormHtml(r) : `
+            <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                <div class="name">${escapeHtml(r.title)}</div>
+                <div style="display:flex;gap:4px;flex-shrink:0;">
+                  <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
+                  <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
+                </div>
+              </div>
+              <div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>
             </div>
-            <div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>
-          </div>
-        `).join('')}
+          `
+        )).join('')}
       </div>
     `).join('');
   }
 
   function renderTrainingReference() {
-    const catNames = [...new Set(cache.trainingReferences.map((r) => r.category))];
+    const catNames = referenceCategoryNames();
     const selectedCatValue = (state.trainingReferenceNewCategoryValue && (catNames.includes(state.trainingReferenceNewCategoryValue) || state.trainingReferenceNewCategoryValue === '__new__'))
       ? state.trainingReferenceNewCategoryValue
       : (catNames[0] || '__new__');
@@ -989,6 +1021,10 @@ const Progress = (() => {
         state.trainingReferenceNewCategoryValue = e.target.value;
         render();
       }
+      if (e.target.id === 'edit-reference-category-select') {
+        state.editingReferenceCategoryValue = e.target.value;
+        render();
+      }
       if (e.target.id === 'import-backup-file') {
         const file = e.target.files[0];
         e.target.value = '';
@@ -1319,6 +1355,37 @@ const Progress = (() => {
           }
           await DB.put('trainingReferences', { id: DB.uid(), title, body, category, order: cache.trainingReferences.length, createdAt: Date.now() });
           state.trainingReferenceNewCategoryValue = category;
+          return render();
+        }
+        case 'edit-reference': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const ref = cache.trainingReferences.find((r) => r.id === id);
+          if (!ref) return;
+          state.editingReferenceId = id;
+          state.editingReferenceCategoryValue = ref.category;
+          return render();
+        }
+        case 'cancel-reference-edit':
+          state.editingReferenceId = null;
+          return render();
+        case 'save-reference-edit': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const ref = cache.trainingReferences.find((r) => r.id === id);
+          if (!ref) return;
+          const titleInput = document.getElementById('edit-reference-title');
+          const bodyInput = document.getElementById('edit-reference-body');
+          const catSelect = document.getElementById('edit-reference-category-select');
+          const title = titleInput.value.trim();
+          const body = bodyInput.value.trim();
+          if (!title || !body) return;
+          let category = catSelect.value;
+          if (category === '__new__') {
+            const newCatInput = document.getElementById('edit-reference-category-new');
+            category = (newCatInput ? newCatInput.value.trim() : '');
+            if (!category) return;
+          }
+          await DB.put('trainingReferences', { ...ref, title, body, category });
+          state.editingReferenceId = null;
           return render();
         }
         case 'add-goal': {
