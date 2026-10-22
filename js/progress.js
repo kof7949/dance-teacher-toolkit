@@ -15,7 +15,7 @@ const Progress = (() => {
     view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
-    editingReferenceId: null, editingReferenceCategoryValue: '',
+    editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(),
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -583,20 +583,24 @@ const Progress = (() => {
     return Object.keys(groups).map((cat) => `
       <div class="skill-category">
         <h4>${escapeHtml(cat)}</h4>
-        ${groups[cat].map((r) => (
-          r.id === state.editingReferenceId ? referenceEditFormHtml(r) : `
+        ${groups[cat].map((r) => {
+          if (r.id === state.editingReferenceId) return referenceEditFormHtml(r);
+          const expanded = state.expandedReferenceIds.has(r.id);
+          return `
             <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                <div class="name">${escapeHtml(r.title)}</div>
+                <div style="flex:1;cursor:pointer;" data-toggle-reference="${r.id}">
+                  <div class="name">${expanded ? '▾' : '▸'} ${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
+                </div>
                 <div style="display:flex;gap:4px;flex-shrink:0;">
                   <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
                   <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
                 </div>
               </div>
-              <div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>
+              ${expanded ? `<div class="sub" style="white-space:pre-wrap;">${escapeHtml(r.body)}</div>` : ''}
             </div>
-          `
-        )).join('')}
+          `;
+        }).join('')}
       </div>
     `).join('');
   }
@@ -1126,7 +1130,13 @@ const Progress = (() => {
       const delGoalId = e.target.closest('[data-del-goal]')?.dataset.delGoal;
       const toggleGoalCompleteId = e.target.closest('[data-toggle-goal-complete]')?.dataset.toggleGoalComplete;
       const delReferenceId = e.target.closest('[data-del-reference]')?.dataset.delReference;
+      const toggleReferenceId = e.target.closest('[data-toggle-reference]')?.dataset.toggleReference;
 
+      if (toggleReferenceId) {
+        if (state.expandedReferenceIds.has(toggleReferenceId)) state.expandedReferenceIds.delete(toggleReferenceId);
+        else state.expandedReferenceIds.add(toggleReferenceId);
+        return render();
+      }
       if (toggleMilestoneAttr) {
         const [goalId, milestoneId] = toggleMilestoneAttr.split(':');
         const goal = cache.trainingGoals.find((g) => g.id === goalId);
