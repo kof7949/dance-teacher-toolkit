@@ -8,10 +8,17 @@ const Progress = (() => {
     { value: 3, label: 'Ready' },
   ];
   const APP_URL = 'https://kof7949.github.io/dance-teacher-toolkit/';
+  const PROGRESS_MODE_KEY = 'dance-toolkit-progress-mode';
 
   let root;
-  let state = { view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false };
-  let cache = { students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {} };
+  let state = {
+    view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
+    mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
+  };
+  let cache = {
+    students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
+    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [],
+  };
 
   function styleIds() { return cache.styles.map((s) => s.id); }
   function styleMeta(id) { return cache.styles.find((s) => s.id === id) || { id, label: id, emoji: '⭐' }; }
@@ -60,6 +67,28 @@ const Progress = (() => {
     cache.progressByStudent[studentId] = map;
     const history = await DB.getAllByIndex('history', 'byStudent', studentId);
     cache.historyByStudent[studentId] = history.sort((a, b) => b.date - a.date).slice(0, 8);
+  }
+
+  async function loadTrainingAll() {
+    cache.trainingSkills = (await DB.getAll('trainingSkills')).sort((a, b) => a.order - b.order);
+    const progressList = await DB.getAll('trainingProgress');
+    const map = {};
+    progressList.forEach((p) => { map[p.skillId] = p; });
+    cache.trainingProgress = map;
+    const history = await DB.getAll('trainingHistory');
+    cache.trainingHistory = history.sort((a, b) => b.date - a.date).slice(0, 8);
+    cache.trainingJournal = (await DB.getAll('trainingJournal')).sort((a, b) => b.date - a.date);
+  }
+
+  // Groups trainingSkills by category only (no per-style dimension -- there's one "trainee").
+  // Categories appear in first-appearance order; no saved custom order for v1.
+  function groupTrainingSkillsByCategory() {
+    const groups = {};
+    cache.trainingSkills.forEach((s) => {
+      if (!groups[s.category]) groups[s.category] = [];
+      groups[s.category].push(s);
+    });
+    return groups;
   }
 
   // Returns { locking: { 'Foundations': [skill,...], ... }, house: {...} }
@@ -112,23 +141,17 @@ const Progress = (() => {
       : '<div class="empty-state">No students yet. Add one below to start tracking progress.</div>');
   }
 
-  function renderList() {
+  function modeToggleHtml() {
     return `
-      <div class="add-row">
-        <input type="text" id="new-student-name" placeholder="New student name" />
+      <div class="tag-buttons" style="margin-bottom:14px;">
+        <button class="chip ${state.mode === 'students' ? 'active' : ''}" data-progress-mode="students">👥 Students</button>
+        <button class="chip ${state.mode === 'training' ? 'active' : ''}" data-progress-mode="training">🧑‍🏫 My Training</button>
       </div>
-      <div class="tag-buttons" style="margin-bottom:10px;">
-        ${styleChipsHtml(state.newStudentStyles, 'new-style')}
-      </div>
-      <button class="btn btn-small" data-action="add-student" style="margin-bottom:16px;">Add student</button>
-      <div class="add-row" style="margin-bottom:10px;">
-        <input type="text" id="student-search" placeholder="🔍 Search students…" value="${escapeHtml(state.studentSearchQuery || '')}" />
-      </div>
-      <div class="student-list" id="student-list-container">${studentRowsHtml(state.studentSearchQuery)}</div>
-      <div class="tag-buttons" style="margin-bottom:8px;">
-        <button class="btn btn-text" data-action="manage-skills">Edit skill checklist</button>
-        <button class="btn btn-text" data-action="manage-styles">Manage dance styles</button>
-      </div>
+    `;
+  }
+
+  function globalSettingsCardsHtml() {
+    return `
       <div class="card" style="margin-top:16px;">
         <div class="section-title" style="margin-top:0;">Backup</div>
         <div class="tag-label">Skills, students and progress are only saved on this device/browser. Export a backup here, then import it on your phone to bring everything over.</div>
@@ -153,6 +176,28 @@ const Progress = (() => {
         <div class="tag-label">This app caches itself for offline use, so a new fix can sometimes take a while to reach your phone on its own. Tap this if something I fixed doesn't seem to show up yet — it only refreshes the app's code, your students/progress/skills are never touched.</div>
         <button class="btn btn-small" data-action="force-update">🔄 Check for updates</button>
       </div>
+    `;
+  }
+
+  function renderList() {
+    return `
+      ${modeToggleHtml()}
+      <div class="add-row">
+        <input type="text" id="new-student-name" placeholder="New student name" />
+      </div>
+      <div class="tag-buttons" style="margin-bottom:10px;">
+        ${styleChipsHtml(state.newStudentStyles, 'new-style')}
+      </div>
+      <button class="btn btn-small" data-action="add-student" style="margin-bottom:16px;">Add student</button>
+      <div class="add-row" style="margin-bottom:10px;">
+        <input type="text" id="student-search" placeholder="🔍 Search students…" value="${escapeHtml(state.studentSearchQuery || '')}" />
+      </div>
+      <div class="student-list" id="student-list-container">${studentRowsHtml(state.studentSearchQuery)}</div>
+      <div class="tag-buttons" style="margin-bottom:8px;">
+        <button class="btn btn-text" data-action="manage-skills">Edit skill checklist</button>
+        <button class="btn btn-text" data-action="manage-styles">Manage dance styles</button>
+      </div>
+      ${globalSettingsCardsHtml()}
     `;
   }
 
@@ -321,7 +366,123 @@ const Progress = (() => {
     `;
   }
 
+  function renderTrainingHome() {
+    const groups = groupTrainingSkillsByCategory();
+    const catNames = Object.keys(groups);
+    const skillsHtml = catNames.length
+      ? catNames.map((cat) => `
+          <div class="skill-category">
+            <h4>${escapeHtml(cat)}</h4>
+            ${groups[cat].map((skill) => {
+              const level = cache.trainingProgress[skill.id] ? cache.trainingProgress[skill.id].level : -1;
+              return `
+                <div class="skill-row">
+                  <div class="skill-name">${escapeHtml(skill.name)}</div>
+                  <div class="level-segment" data-skill="${skill.id}">
+                    ${LEVELS.map((l) => `
+                      <button class="level-btn ${level === l.value ? 'active' : ''}" data-set-training-level="${skill.id}:${l.value}">${l.label}</button>
+                    `).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `).join('')
+      : '<div class="empty-state">No training skills yet. Use "Edit my skills checklist" below to add your first one.</div>';
+
+    const historyHtml = cache.trainingHistory.length
+      ? cache.trainingHistory.map((h) => {
+          const skill = cache.trainingSkills.find((s) => s.id === h.skillId);
+          const levelLabel = LEVELS.find((l) => l.value === h.level)?.label || h.level;
+          return `<div>${fmtDate(h.date)} — ${escapeHtml(skill ? skill.name : 'Skill')}: <b>${levelLabel}</b></div>`;
+        }).join('')
+      : '<div class="empty-state">No updates logged yet.</div>';
+
+    const journalHtml = cache.trainingJournal.length
+      ? cache.trainingJournal.map((j) => `
+          <div class="student-card">
+            <div>
+              <div class="sub">${fmtDate(j.date)}</div>
+              <div class="name">${escapeHtml(j.text)}</div>
+            </div>
+            <button class="dancer-chip-del" data-del-journal="${j.id}" title="Delete entry">✕</button>
+          </div>
+        `).join('')
+      : '<div class="empty-state">No journal entries yet. Log what you worked on above.</div>';
+
+    return `
+      ${modeToggleHtml()}
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
+        ${skillsHtml}
+        <button class="btn btn-text" data-action="training-manage-skills" style="margin-top:8px;">Edit my skills checklist</button>
+        <div class="section-title">Recent updates</div>
+        <div class="summary-box">${historyHtml}</div>
+      </div>
+      <div class="card">
+        <div class="section-title" style="margin-top:0;">📓 Training Journal</div>
+        <div class="add-row">
+          <input type="text" id="training-journal-input" placeholder="What did you work on today?" />
+        </div>
+        <button class="btn btn-small" data-action="add-journal-entry" style="margin-bottom:12px;">Add entry</button>
+        <div class="student-list">${journalHtml}</div>
+      </div>
+      ${globalSettingsCardsHtml()}
+    `;
+  }
+
+  function renderTrainingManageSkills() {
+    const groups = groupTrainingSkillsByCategory();
+    const catNames = Object.keys(groups);
+    const selectedCatValue = (state.trainingNewSkillCategoryValue && (catNames.includes(state.trainingNewSkillCategoryValue) || state.trainingNewSkillCategoryValue === '__new__'))
+      ? state.trainingNewSkillCategoryValue
+      : (catNames[0] || '__new__');
+
+    const catsHtml = catNames.map((cat) => `
+      <div class="skill-category">
+        <h4>${escapeHtml(cat)}</h4>
+        ${groups[cat].map((s) => `
+          <div class="skill-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
+            <span class="skill-name" style="flex:1;margin-right:8px;">${escapeHtml(s.name)}</span>
+            <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
+          </div>
+        `).join('')}
+      </div>
+    `).join('') || '<div class="empty-state">No training skills yet.</div>';
+
+    return `
+      <div class="back-row">
+        <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
+      </div>
+      <div class="section-title">Edit my skills checklist</div>
+      <div class="add-row">
+        <select id="new-training-skill-category-select" class="song-select" style="flex:0 0 45%">
+          ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
+        </select>
+        <input type="text" id="new-training-skill-name" placeholder="Skill or concept name" />
+      </div>
+      ${selectedCatValue === '__new__' ? `
+        <div class="add-row">
+          <input type="text" id="new-training-skill-category-new" placeholder="New category name" />
+        </div>
+      ` : ''}
+      <button class="btn btn-small" data-action="add-training-skill" style="margin-bottom:16px;">Add skill</button>
+      ${catsHtml}
+    `;
+  }
+
+  function renderTrainingMode() {
+    if (state.trainingView === 'manage-skills') return renderTrainingManageSkills();
+    return renderTrainingHome();
+  }
+
   async function render() {
+    if (state.mode === 'training') {
+      await loadTrainingAll();
+      root.innerHTML = renderTrainingMode();
+      return;
+    }
     if (state.view === 'student' && state.studentId) {
       await loadStudentData(state.studentId);
       root.innerHTML = renderStudent(state.studentId);
@@ -443,6 +604,20 @@ const Progress = (() => {
     const id = existing ? existing.id : DB.uid();
     await DB.put('progress', { id, studentId, skillId, level, updatedAt: Date.now() });
     await DB.put('history', { id: DB.uid(), studentId, skillId, level, date: Date.now() });
+    await render();
+  }
+
+  async function setTrainingLevel(skillId, level) {
+    const existing = cache.trainingProgress[skillId];
+    if (existing && existing.level === level) {
+      // Tapping the already-selected level again clears it back to unset.
+      await DB.delete('trainingProgress', existing.id);
+      await render();
+      return;
+    }
+    const id = existing ? existing.id : DB.uid();
+    await DB.put('trainingProgress', { id, skillId, level, updatedAt: Date.now() });
+    await DB.put('trainingHistory', { id: DB.uid(), skillId, level, date: Date.now() });
     await render();
   }
 
@@ -619,6 +794,11 @@ const Progress = (() => {
         state.addingNewCategory = e.target.value === '__new__';
         render();
       }
+      if (e.target.id === 'new-training-skill-category-select') {
+        state.trainingNewSkillCategoryValue = e.target.value;
+        state.trainingAddingNewCategory = e.target.value === '__new__';
+        render();
+      }
       if (e.target.id === 'import-backup-file') {
         const file = e.target.files[0];
         e.target.value = '';
@@ -661,6 +841,10 @@ const Progress = (() => {
           for (const d of (data.dancers || [])) await DB.put('dancers', d);
           for (const f of (data.formations || [])) await DB.put('formations', f);
           for (const pos of (data.positions || [])) await DB.put('positions', pos);
+          for (const s of (data.trainingSkills || [])) await DB.put('trainingSkills', s);
+          for (const p of (data.trainingProgress || [])) await DB.put('trainingProgress', p);
+          for (const h of (data.trainingHistory || [])) await DB.put('trainingHistory', h);
+          for (const j of (data.trainingJournal || [])) await DB.put('trainingJournal', j);
 
           // Merge by id rather than overwrite, same as everything above -- a restore
           // shouldn't wipe out custom Groove patterns built on this device since the backup
@@ -684,7 +868,9 @@ const Progress = (() => {
           if (out2) {
             const dupeNote = removedDupes ? ` (removed ${removedDupes} duplicate skill${removedDupes === 1 ? '' : 's'})` : '';
             const grooveNote = importedGrooveCount ? `, ${importedGrooveCount} groove preset(s)` : '';
-            out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s)${grooveNote}${dupeNote}.</div>`;
+            const journalCount = (data.trainingJournal || []).length;
+            const journalNote = journalCount ? `, ${journalCount} journal entr${journalCount === 1 ? 'y' : 'ies'}` : '';
+            out2.innerHTML = `<div class="summary-box">Backup imported: ${data.students.length} student(s), ${data.skills.length} skill(s)${grooveNote}${journalNote}${dupeNote}.</div>`;
           }
         } catch (err) {
           if (out) out.innerHTML = `<div class="summary-box">Import failed: ${escapeHtml(err.message)}</div>`;
@@ -701,7 +887,34 @@ const Progress = (() => {
       const newStyleBtn = e.target.closest('[data-new-style]');
       const toggleStyleBtn = e.target.closest('[data-toggle-style]');
       const manageStyleBtn = e.target.closest('[data-manage-style]');
+      const progressModeBtn = e.target.closest('[data-progress-mode]');
+      const setTrainingLevelAttr = e.target.closest('[data-set-training-level]')?.dataset.setTrainingLevel;
+      const delTrainingSkillId = e.target.closest('[data-del-training-skill]')?.dataset.delTrainingSkill;
+      const delJournalId = e.target.closest('[data-del-journal]')?.dataset.delJournal;
 
+      if (progressModeBtn) {
+        state.mode = progressModeBtn.dataset.progressMode;
+        try { localStorage.setItem(PROGRESS_MODE_KEY, state.mode); } catch (err) { /* ignore */ }
+        return render();
+      }
+      if (setTrainingLevelAttr) {
+        const [skillId, level] = setTrainingLevelAttr.split(':');
+        return setTrainingLevel(skillId, Number(level));
+      }
+      if (delTrainingSkillId) {
+        if (!confirm('Remove this skill from your checklist?')) return;
+        const allProgress = await DB.getAll('trainingProgress');
+        for (const p of allProgress) if (p.skillId === delTrainingSkillId) await DB.delete('trainingProgress', p.id);
+        const allHistory = await DB.getAll('trainingHistory');
+        for (const h of allHistory) if (h.skillId === delTrainingSkillId) await DB.delete('trainingHistory', h.id);
+        await DB.delete('trainingSkills', delTrainingSkillId);
+        return render();
+      }
+      if (delJournalId) {
+        if (!confirm('Delete this journal entry?')) return;
+        await DB.delete('trainingJournal', delJournalId);
+        return render();
+      }
       if (manageStyleBtn) {
         state.manageStyle = manageStyleBtn.dataset.manageStyle;
         state.addingNewCategory = false;
@@ -813,6 +1026,35 @@ const Progress = (() => {
         case 'manage-styles':
           state.view = 'manage-styles';
           return render();
+        case 'training-manage-skills':
+          state.trainingView = 'manage-skills';
+          state.trainingNewSkillCategoryValue = '';
+          return render();
+        case 'training-back-to-home':
+          state.trainingView = 'home';
+          return render();
+        case 'add-training-skill': {
+          const catSelect = document.getElementById('new-training-skill-category-select');
+          const nameInput = document.getElementById('new-training-skill-name');
+          const name = nameInput.value.trim();
+          if (!name) return;
+          let category = catSelect.value;
+          if (category === '__new__') {
+            const newCatInput = document.getElementById('new-training-skill-category-new');
+            category = (newCatInput ? newCatInput.value.trim() : '');
+            if (!category) return;
+          }
+          await DB.put('trainingSkills', { id: DB.uid(), name, category, order: cache.trainingSkills.length });
+          state.trainingNewSkillCategoryValue = category;
+          return render();
+        }
+        case 'add-journal-entry': {
+          const input = document.getElementById('training-journal-input');
+          const text = input.value.trim();
+          if (!text) return;
+          await DB.put('trainingJournal', { id: DB.uid(), date: Date.now(), text });
+          return render();
+        }
         case 'add-style': {
           const labelInput = document.getElementById('new-style-label');
           const emojiInput = document.getElementById('new-style-emoji');
@@ -851,9 +1093,10 @@ const Progress = (() => {
         case 'export-backup': {
           const out = document.getElementById('backup-output');
           if (out) out.innerHTML = '<div class="summary-box">Preparing backup…</div>';
-          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions] = await Promise.all([
+          const [skills, categoryOrderRecords, students, progress, history, styles, routines, dancers, formations, positions, trainingSkills, trainingProgress, trainingHistory, trainingJournal] = await Promise.all([
             DB.getAll('skills'), DB.getAll('categoryOrder'), DB.getAll('students'), DB.getAll('progress'), DB.getAll('history'), DB.getAll('styles'),
             DB.getAll('routines'), DB.getAll('dancers'), DB.getAll('formations'), DB.getAll('positions'),
+            DB.getAll('trainingSkills'), DB.getAll('trainingProgress'), DB.getAll('trainingHistory'), DB.getAll('trainingJournal'),
           ]);
           // Groove Lab's custom presets live in localStorage (not IndexedDB, like everything
           // else here), since the Metronome module persists its settings that way -- pull
@@ -864,10 +1107,11 @@ const Progress = (() => {
             if (raw) groovePresets = JSON.parse(raw);
           } catch (err) { /* ignore */ }
           const backup = {
-            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 4,
+            app: 'dance-teacher-toolkit', type: 'progress-backup', version: 5,
             exportedAt: new Date().toISOString(),
             skills, categoryOrder: categoryOrderRecords, students, progress, history, styles,
             routines, dancers, formations, positions, groovePresets,
+            trainingSkills, trainingProgress, trainingHistory, trainingJournal,
           };
           const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
           const fileName = `dance-toolkit-backup-${new Date().toISOString().slice(0, 10)}.json`;
@@ -878,9 +1122,10 @@ const Progress = (() => {
           const out2 = document.getElementById('backup-output');
           if (out2) {
             const grooveNote = groovePresets.length ? `, ${groovePresets.length} groove preset(s)` : '';
+            const journalNote = trainingJournal.length ? `, ${trainingJournal.length} journal entr${trainingJournal.length === 1 ? 'y' : 'ies'}` : '';
             out2.innerHTML = `
               <div class="summary-box">
-                <div style="margin-bottom:10px;">Backup ready: ${students.length} student(s), ${skills.length} skill(s)${grooveNote}.</div>
+                <div style="margin-bottom:10px;">Backup ready: ${students.length} student(s), ${skills.length} skill(s)${grooveNote}${journalNote}.</div>
                 <a class="btn btn-small" href="${url}" download="${escapeHtml(fileName)}">⬇ Save backup file</a>
               </div>
             `;
@@ -935,9 +1180,17 @@ const Progress = (() => {
     });
   }
 
+  function loadProgressMode() {
+    try {
+      const saved = localStorage.getItem(PROGRESS_MODE_KEY);
+      if (saved === 'training' || saved === 'students') state.mode = saved;
+    } catch (err) { /* ignore */ }
+  }
+
   async function init() {
     root = document.getElementById('progress-root');
     wireEvents();
+    loadProgressMode();
     await loadAll();
     await render();
   }
