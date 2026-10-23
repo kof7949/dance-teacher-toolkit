@@ -15,7 +15,7 @@ const Progress = (() => {
     view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
-    editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(),
+    editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(), referenceAddFormOpen: false,
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -628,30 +628,35 @@ const Progress = (() => {
       <div class="back-row">
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
-      <div class="section-title" style="margin-top:0;">📚 Reference</div>
+      <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
+        <span>📚 Reference</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-small" data-action="toggle-reference-add-form">${state.referenceAddFormOpen ? '✕ Close' : '+ Add note'}</button>
+      </div>
+      ${state.referenceAddFormOpen ? `
+        <div class="add-row">
+          <textarea id="new-reference-title" placeholder="Title, e.g. 'Spotting cue for turns'" rows="1"></textarea>
+        </div>
+        <div class="add-row">
+          <select id="new-reference-category-select" class="song-select" style="flex:0 0 45%">
+            ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
+          </select>
+        </div>
+        ${selectedCatValue === '__new__' ? `
+          <div class="add-row">
+            <textarea id="new-reference-category-new" placeholder="New category name" rows="1"></textarea>
+          </div>
+        ` : ''}
+        <div class="add-row">
+          <textarea id="new-reference-body" placeholder="The note itself…" rows="3"></textarea>
+        </div>
+        <button class="btn btn-small" data-action="add-reference" style="margin-bottom:16px;">Add note</button>
+      ` : ''}
       <div class="add-row">
         <input type="text" id="reference-search" placeholder="🔍 Search your notes…" value="${escapeHtml(state.trainingReferenceSearchQuery || '')}" />
       </div>
       <div id="reference-list-container">${referenceRowsHtml(state.trainingReferenceSearchQuery)}</div>
-      <div class="section-title">Add a note</div>
-      <div class="add-row">
-        <textarea id="new-reference-title" placeholder="Title, e.g. 'Spotting cue for turns'" rows="1"></textarea>
-      </div>
-      <div class="add-row">
-        <select id="new-reference-category-select" class="song-select" style="flex:0 0 45%">
-          ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-          <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
-        </select>
-      </div>
-      ${selectedCatValue === '__new__' ? `
-        <div class="add-row">
-          <textarea id="new-reference-category-new" placeholder="New category name" rows="1"></textarea>
-        </div>
-      ` : ''}
-      <div class="add-row">
-        <textarea id="new-reference-body" placeholder="The note itself…" rows="3"></textarea>
-      </div>
-      <button class="btn btn-small" data-action="add-reference" style="margin-bottom:16px;">Add note</button>
     `;
   }
 
@@ -1195,6 +1200,7 @@ const Progress = (() => {
       }
       if (trainingTile) {
         state.trainingView = trainingTile;
+        state.referenceAddFormOpen = false;
         return render();
       }
       if (setTrainingLevelAttr) {
@@ -1337,9 +1343,13 @@ const Progress = (() => {
           return render();
         case 'training-back-to-home':
           state.trainingView = 'home';
+          state.referenceAddFormOpen = false;
           return render();
         case 'training-back-to-skills':
           state.trainingView = 'skills';
+          return render();
+        case 'toggle-reference-add-form':
+          state.referenceAddFormOpen = !state.referenceAddFormOpen;
           return render();
         case 'add-training-skill': {
           const catSelect = document.getElementById('new-training-skill-category-select');
@@ -1378,6 +1388,7 @@ const Progress = (() => {
           }
           await DB.put('trainingReferences', { id: DB.uid(), title, body, category, order: cache.trainingReferences.length, createdAt: Date.now() });
           state.trainingReferenceNewCategoryValue = category;
+          state.referenceAddFormOpen = false;
           return render();
         }
         case 'edit-reference': {
