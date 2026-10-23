@@ -802,9 +802,23 @@ main {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  overflow: hidden;
 }
-.vfs-body .waveform-wrap { flex-shrink: 0; border-radius: 0; }
-.vfs-body .video-player { width: 100%; max-height: none; }
+/* Unlike the normal view (where the wrap shrinks to fit a full-width video), fullscreen's
+   wrap must never grow taller than the space left by the topbar/controls bars -- otherwise
+   a video whose aspect ratio is wide relative to the screen (e.g. landscape video on a short
+   landscape phone screen) pushes the controls bar off the visible viewport entirely. Letting
+   the wrap fill the remaining flex space and the video scale down inside it via object-fit
+   keeps the controls always on screen, letterboxing the video instead when needed. */
+.vfs-body .waveform-wrap {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vfs-body .video-player { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
 .vfs-controls {
   display: flex;
   align-items: center;
