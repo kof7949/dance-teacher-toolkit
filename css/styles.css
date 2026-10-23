@@ -788,15 +788,17 @@ main {
    fit in whatever height was left), especially on a wide-but-short landscape phone screen.
    Floating them lets the video use the entire screen, letterboxing only for a genuine
    aspect-ratio mismatch rather than for the controls' own height. */
+/* The exit button now lives in the bottom controls row next to mirror, so this topbar only
+   ever holds the rotate hint -- no background of its own, so it stays invisible until that
+   hint actually has something to say instead of showing as an empty dark strip. */
 .vfs-topbar {
   position: absolute;
   top: 0; left: 0; right: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: calc(8px + var(--safe-top)) 12px 8px;
-  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.65), transparent);
+  justify-content: center;
+  padding: calc(8px + var(--safe-top)) 12px 0;
+  pointer-events: none;
   transition: opacity 0.25s ease;
 }
 /* Auto-hide (YouTube-style): js adds/removes this on the shell after a few seconds of no
@@ -810,6 +812,9 @@ main {
 .vfs-rotate-hint {
   color: var(--text-dim);
   font-size: 0.8rem;
+  background: rgba(0, 0, 0, 0.65);
+  padding: 6px 12px;
+  border-radius: 999px;
 }
 .vfs-body {
   position: absolute;
