@@ -222,11 +222,7 @@ main {
   background: var(--accent-2);
 }
 
-.btn-video-overlay {
-  position: absolute; top: 8px; right: 8px; z-index: 5;
-  width: 36px; height: 36px; border: none; border-radius: 8px;
-  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 1.1rem; cursor: pointer;
-}
+.video-controls-row { display: flex; justify-content: flex-end; gap: 8px; margin: 8px 0; }
 .video-progress-track {
   position: absolute; left: 0; right: 0; bottom: 10px; height: 4px;
   background: rgba(255, 255, 255, 0.35); border-radius: 2px; pointer-events: none;
@@ -778,4 +774,46 @@ main {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.video-fullscreen-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+}
+.vfs-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: calc(8px + var(--safe-top)) 12px 8px;
+  flex-shrink: 0;
+}
+.vfs-rotate-hint {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+}
+.vfs-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.vfs-body .waveform-wrap { flex-shrink: 0; border-radius: 0; }
+.vfs-body .video-player { width: 100%; max-height: none; }
+.vfs-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px calc(10px + var(--safe-bottom));
+  background: rgba(0, 0, 0, 0.6);
+}
+.vfs-time { font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.btn-video-overlay-ctrl {
+  background: rgba(255, 255, 255, 0.12); color: #fff; border: none; border-radius: 8px;
+  padding: 8px 12px; font-size: 0.85rem; cursor: pointer;
 }

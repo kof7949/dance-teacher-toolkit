@@ -32,6 +32,19 @@ const Music = (() => {
     return currentSong && currentSong.kind === 'video' ? el.video : el.audio;
   }
 
+  // Both the normal play button and the fullscreen one reflect the same playback state,
+  // so every place that used to set el.btnPlay.textContent directly updates both here.
+  function setPlayButtonLabel(label) {
+    el.btnPlay.textContent = label;
+    if (el.fsBtnPlay) el.fsBtnPlay.textContent = label;
+  }
+
+  function toggleVideoMirror() {
+    videoMirrored = !videoMirrored;
+    try { localStorage.setItem(VIDEO_MIRROR_KEY, videoMirrored ? '1' : '0'); } catch (err) { /* ignore */ }
+    el.video.classList.toggle('mirrored', videoMirrored);
+  }
+
   function probeVideoDuration(blob) {
     return new Promise((resolve) => {
       const probe = document.createElement('video');
@@ -62,6 +75,7 @@ const Music = (() => {
   function cacheEls() {
     el.songSelect = document.getElementById('song-select');
     el.songFile = document.getElementById('song-file');
+    el.songRow = document.querySelector('.song-row');
     el.waveform = document.getElementById('waveform');
     el.waveWrap = document.querySelector('.waveform-wrap');
     el.loopRegion = document.getElementById('loop-region');
@@ -86,10 +100,20 @@ const Music = (() => {
     el.tagList = document.getElementById('tag-list');
     el.audio = document.getElementById('audio-player');
     el.video = document.getElementById('video-player');
+    el.videoControlsRow = document.getElementById('video-controls-row');
     el.btnMirrorVideo = document.getElementById('btn-mirror-video');
+    el.btnVideoFullscreen = document.getElementById('btn-video-fullscreen');
     el.videoProgressTrack = document.getElementById('video-progress-track');
     el.videoProgressFill = document.getElementById('video-progress-fill');
     el.videoProgressHandle = document.getElementById('video-progress-handle');
+    el.videoFullscreenShell = document.getElementById('video-fullscreen-shell');
+    el.videoFullscreenSlot = document.getElementById('video-fullscreen-slot');
+    el.btnExitVideoFullscreen = document.querySelector('[data-action="exit-video-fullscreen"]');
+    el.vfsRotateHint = document.getElementById('vfs-rotate-hint');
+    el.fsBtnPlay = document.getElementById('fs-btn-play');
+    el.fsTime = document.getElementById('fs-time');
+    el.fsBtnSpeed = document.getElementById('fs-btn-speed');
+    el.fsBtnMirror = document.getElementById('fs-btn-mirror');
     el.btnDeleteSong = document.getElementById('btn-delete-song');
     el.nudgeInMinus = document.getElementById('btn-nudge-in-minus');
     el.nudgeInPlus = document.getElementById('btn-nudge-in-plus');
@@ -170,7 +194,7 @@ const Music = (() => {
       el.waveform.hidden = false;
       el.btnPlay.disabled = true;
       el.waveWrap.classList.remove('video-mode');
-      el.btnMirrorVideo.hidden = true;
+      el.videoControlsRow.hidden = true;
       el.videoProgressTrack.hidden = true;
       drawWaveform([]);
       renderTags([]);
@@ -192,11 +216,11 @@ const Music = (() => {
     el.video.hidden = !isVideo;
     el.waveform.hidden = isVideo;
     el.waveWrap.classList.toggle('video-mode', isVideo);
-    el.btnMirrorVideo.hidden = !isVideo;
+    el.videoControlsRow.hidden = !isVideo;
     el.videoProgressTrack.hidden = !isVideo;
     el.video.classList.toggle('mirrored', videoMirrored);
     el.btnPlay.disabled = false;
-    el.btnPlay.textContent = '▶';
+    setPlayButtonLabel('▶');
     loopStart = null;
     loopEnd = null;
     el.loopEnabled.checked = false;
@@ -395,6 +419,8 @@ const Music = (() => {
     renderTags(tags.sort((a, b) => a.time - b.time));
   }
 
+  const SPEED_PRESETS = [50, 60, 70, 80, 90, 100];
+
   function setSpeed(pct) {
     pct = Math.min(100, Math.max(50, Number(pct)));
     el.speedSlider.value = pct;
@@ -402,6 +428,44 @@ const Music = (() => {
     el.audio.playbackRate = pct / 100;
     el.video.playbackRate = pct / 100;
     el.speedChips.forEach((c) => c.classList.toggle('active', Number(c.dataset.speed) === pct));
+    if (el.fsBtnSpeed) el.fsBtnSpeed.textContent = (pct / 100).toFixed(1) + 'x';
+  }
+
+  function cycleSpeed() {
+    const current = Number(el.speedSlider.value);
+    const idx = SPEED_PRESETS.indexOf(current);
+    const next = SPEED_PRESETS[(idx + 1) % SPEED_PRESETS.length];
+    setSpeed(next);
+  }
+
+  function withTimeout(promise, ms) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timed out')), ms)),
+    ]);
+  }
+
+  async function enterVideoFullscreen() {
+    el.videoFullscreenShell.hidden = false;
+    el.videoFullscreenSlot.prepend(el.waveWrap);
+    el.vfsRotateHint.hidden = true;
+    try {
+      await withTimeout(el.videoFullscreenShell.requestFullscreen(), 1500);
+    } catch (err) { /* continue as an in-page overlay */ }
+    if (el.video.videoWidth >= el.video.videoHeight) {
+      try {
+        await withTimeout(screen.orientation.lock('landscape'), 1500);
+      } catch (err) {
+        el.vfsRotateHint.hidden = false;
+      }
+    }
+  }
+
+  function exitVideoFullscreen() {
+    el.songRow.insertAdjacentElement('afterend', el.waveWrap);
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (err) { /* ignore */ }
+    el.videoFullscreenShell.hidden = true;
   }
 
   function wireEvents() {
@@ -437,20 +501,21 @@ const Music = (() => {
       const media = activeMedia();
       if (media.paused) {
         media.play();
-        el.btnPlay.textContent = '⏸';
+        setPlayButtonLabel('⏸');
       } else {
         media.pause();
-        el.btnPlay.textContent = '▶';
+        setPlayButtonLabel('▶');
       }
     });
 
-    const handleEnded = () => { el.btnPlay.textContent = '▶'; };
+    const handleEnded = () => setPlayButtonLabel('▶');
     el.audio.addEventListener('ended', handleEnded);
     el.video.addEventListener('ended', handleEnded);
 
     const handleTimeUpdate = () => {
       const media = activeMedia();
       el.timeCurrent.textContent = fmtTime(media.currentTime);
+      if (el.fsTime) el.fsTime.textContent = fmtTime(media.currentTime) + ' / ' + fmtTime(currentSong ? currentSong.duration : 0);
       if (currentSong && currentSong.duration) {
         const pct = (media.currentTime / currentSong.duration) * 100;
         if (currentSong.kind === 'video') {
@@ -475,11 +540,6 @@ const Music = (() => {
 
     el.waveWrap.addEventListener('pointerdown', (e) => {
       if (!currentSong) return;
-      // The mirror button floats on top of the video inside this same wrap -- without this
-      // guard, a tap on it also bubbles up as a scrub/seek (and the pointer capture below
-      // swallows the button's own click), so pressing it appeared to just seek the video
-      // instead of mirroring it.
-      if (e.target.closest('.btn-video-overlay')) return;
       scrubbing = true;
       el.scrubMarker.hidden = false;
       el.scrubTooltip.hidden = false;
@@ -564,11 +624,12 @@ const Music = (() => {
       await loadSong('');
     });
 
-    el.btnMirrorVideo.addEventListener('click', () => {
-      videoMirrored = !videoMirrored;
-      try { localStorage.setItem(VIDEO_MIRROR_KEY, videoMirrored ? '1' : '0'); } catch (err) { /* ignore */ }
-      el.video.classList.toggle('mirrored', videoMirrored);
-    });
+    el.btnMirrorVideo.addEventListener('click', toggleVideoMirror);
+    el.fsBtnMirror.addEventListener('click', toggleVideoMirror);
+    el.btnVideoFullscreen.addEventListener('click', enterVideoFullscreen);
+    el.btnExitVideoFullscreen.addEventListener('click', exitVideoFullscreen);
+    el.fsBtnPlay.addEventListener('click', () => el.btnPlay.click());
+    el.fsBtnSpeed.addEventListener('click', cycleSpeed);
 
     window.addEventListener('resize', redrawWaveformIfNeeded);
 

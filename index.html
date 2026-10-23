@@ -60,7 +60,6 @@
         <div class="waveform-wrap">
           <canvas id="waveform" height="130"></canvas>
           <video id="video-player" class="video-player" playsinline hidden></video>
-          <button id="btn-mirror-video" class="btn-video-overlay" type="button" hidden title="Mirror the video">🪞</button>
           <div id="video-progress-track" class="video-progress-track" hidden>
             <div id="video-progress-fill" class="video-progress-fill"></div>
             <div id="video-progress-handle" class="video-progress-handle"></div>
@@ -71,6 +70,11 @@
           <div id="playhead" class="playhead" hidden></div>
           <div id="scrub-marker" class="scrub-marker" hidden></div>
           <div id="scrub-tooltip" class="scrub-tooltip" hidden>0:00</div>
+        </div>
+
+        <div id="video-controls-row" class="video-controls-row" hidden>
+          <button id="btn-mirror-video" class="btn btn-small btn-ghost" type="button" title="Mirror the video"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 3"/><path d="M8 8 4 12l4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
+          <button id="btn-video-fullscreen" class="btn btn-small btn-ghost" type="button" title="Full screen">⛶</button>
         </div>
 
         <div class="time-row">
@@ -190,6 +194,22 @@
       <span class="fs-rotate-hint" id="fs-rotate-hint" hidden>↻ Rotate your phone to landscape</span>
     </div>
     <div id="formation-fullscreen-slot" class="fs-body"></div>
+  </div>
+
+  <div id="video-fullscreen-shell" class="video-fullscreen-shell" hidden>
+    <div class="vfs-topbar">
+      <button class="btn btn-small btn-ghost" data-action="exit-video-fullscreen">✕ Close</button>
+      <span class="vfs-rotate-hint" id="vfs-rotate-hint" hidden>↻ Rotate your phone to landscape</span>
+    </div>
+    <div id="video-fullscreen-slot" class="vfs-body">
+      <div class="vfs-controls">
+        <button id="fs-btn-play" class="btn-video-overlay-ctrl" type="button">▶</button>
+        <span id="fs-time" class="vfs-time">0:00 / 0:00</span>
+        <div style="flex:1"></div>
+        <button id="fs-btn-speed" class="btn-video-overlay-ctrl" type="button">1.0x</button>
+        <button id="fs-btn-mirror" class="btn-video-overlay-ctrl" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 3"/><path d="M8 8 4 12l4 4"/><path d="M16 8l4 4-4 4"/></svg></button>
+      </div>
+    </div>
   </div>
 
   <script src="js/lock.js"></script>
