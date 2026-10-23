@@ -189,6 +189,18 @@ const Music = (() => {
     renderTags(tags.sort((a, b) => a.time - b.time));
   }
 
+  // Lets another screen (a Reference note linking to a video moment) load a song and jump
+  // straight to a timestamp. Setting .currentTime right after assigning .src can be ignored
+  // by the browser before metadata has loaded, so this waits for that when necessary.
+  async function loadAndSeek(id, time) {
+    await loadSong(id);
+    el.songSelect.value = id;
+    const media = activeMedia();
+    const seek = () => { media.currentTime = time; };
+    if (media.readyState >= 1) seek();
+    else media.addEventListener('loadedmetadata', seek, { once: true });
+  }
+
   function updateNudgeButtonsState() {
     el.nudgeInMinus.disabled = loopStart == null;
     el.nudgeInPlus.disabled = loopStart == null;
@@ -535,5 +547,5 @@ const Music = (() => {
     await populateSongSelect();
   }
 
-  return { init, onShow: redrawWaveformIfNeeded };
+  return { init, onShow: redrawWaveformIfNeeded, loadAndSeek };
 })();

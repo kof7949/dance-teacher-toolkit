@@ -19,7 +19,7 @@ const Progress = (() => {
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
-    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [], trainingGoals: [], trainingReferences: [],
+    trainingSkills: [], trainingProgress: {}, trainingHistory: [], trainingJournal: [], trainingGoals: [], trainingReferences: [], songs: [],
   };
 
   function styleIds() { return cache.styles.map((s) => s.id); }
@@ -48,6 +48,27 @@ const Progress = (() => {
   function fmtDateWithYear(ts) {
     const d = new Date(ts);
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  // Mirrors music.js's own fmtTime -- duplicated rather than shared since the two modules
+  // don't currently share utility code.
+  function fmtTimeShort(sec) {
+    sec = Math.max(0, Math.floor(sec || 0));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ':' + String(s).padStart(2, '0');
+  }
+
+  // Parses "m:ss" or a bare seconds number typed into a text field. Returns null if the
+  // field is empty or not parseable, rather than guessing.
+  function parseTimeInput(value) {
+    const trimmed = (value || '').trim();
+    if (!trimmed) return null;
+    const parts = trimmed.split(':').map((p) => Number(p));
+    if (parts.some((p) => !isFinite(p))) return null;
+    if (parts.length === 1) return parts[0];
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    return null;
   }
 
   function styleBadges(styles) {
@@ -89,6 +110,7 @@ const Progress = (() => {
     cache.trainingJournal = (await DB.getAll('trainingJournal')).sort((a, b) => b.date - a.date);
     cache.trainingGoals = (await DB.getAll('trainingGoals')).sort((a, b) => a.order - b.order);
     cache.trainingReferences = (await DB.getAll('trainingReferences')).sort((a, b) => a.order - b.order);
+    cache.songs = await DB.getAll('songs');
   }
 
   function isGoalComplete(goal) {
@@ -560,6 +582,13 @@ const Progress = (() => {
         </select>
         ${selectedCatValue === '__new__' ? `<textarea id="edit-reference-category-new" placeholder="New category name" rows="1"></textarea>` : ''}
         <textarea id="edit-reference-body" rows="3">${escapeHtml(r.body)}</textarea>
+        <div class="add-row" style="margin-bottom:0;">
+          <select id="edit-reference-song-select" class="song-select">
+            <option value="">No video link</option>
+            ${cache.songs.map((s) => `<option value="${s.id}" ${r.linkedSongId === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
+          </select>
+          <input type="text" id="edit-reference-song-time" placeholder="Timestamp, e.g. 1:23" style="flex:0 0 120px;" value="${r.linkedSongId ? fmtTimeShort(r.linkedTime) : ''}" />
+        </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-small" data-action="save-reference-edit" data-id="${r.id}">Save</button>
           <button class="btn btn-small btn-text" data-action="cancel-reference-edit">Cancel</button>
@@ -601,6 +630,7 @@ const Progress = (() => {
           if (r.id === state.editingReferenceId) return referenceEditFormHtml(r);
           const expanded = state.expandedReferenceIds.has(r.id);
           const bodyText = expanded ? r.body : referencePreviewText(r.body);
+          const linkedSong = r.linkedSongId ? cache.songs.find((s) => s.id === r.linkedSongId) : null;
           return `
             <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
@@ -610,6 +640,7 @@ const Progress = (() => {
                   <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
                 </div>
               </div>
+              ${linkedSong ? `<button class="btn btn-small" data-jump-reference="${r.id}">▶ ${fmtTimeShort(r.linkedTime)} · ${escapeHtml(linkedSong.name)}</button>` : ''}
               <div class="sub" style="white-space:pre-wrap;cursor:pointer;" data-toggle-reference="${r.id}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'} ${escapeHtml(bodyText)}</div>
             </div>
           `;
@@ -650,6 +681,13 @@ const Progress = (() => {
         ` : ''}
         <div class="add-row">
           <textarea id="new-reference-body" placeholder="The note itself…" rows="3"></textarea>
+        </div>
+        <div class="add-row">
+          <select id="new-reference-song-select" class="song-select">
+            <option value="">No video link</option>
+            ${cache.songs.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}
+          </select>
+          <input type="text" id="new-reference-song-time" placeholder="Timestamp, e.g. 1:23" style="flex:0 0 120px;" />
         </div>
         <button class="btn btn-small" data-action="add-reference" style="margin-bottom:16px;">Add note</button>
       ` : ''}
@@ -1149,11 +1187,20 @@ const Progress = (() => {
       const toggleGoalCompleteId = e.target.closest('[data-toggle-goal-complete]')?.dataset.toggleGoalComplete;
       const delReferenceId = e.target.closest('[data-del-reference]')?.dataset.delReference;
       const toggleReferenceId = e.target.closest('[data-toggle-reference]')?.dataset.toggleReference;
+      const jumpReferenceId = e.target.closest('[data-jump-reference]')?.dataset.jumpReference;
 
       if (toggleReferenceId) {
         if (state.expandedReferenceIds.has(toggleReferenceId)) state.expandedReferenceIds.delete(toggleReferenceId);
         else state.expandedReferenceIds.add(toggleReferenceId);
         return render();
+      }
+      if (jumpReferenceId) {
+        const ref = cache.trainingReferences.find((r) => r.id === jumpReferenceId);
+        if (ref && ref.linkedSongId) {
+          window.switchAppTab('music');
+          await Music.loadAndSeek(ref.linkedSongId, ref.linkedTime);
+        }
+        return;
       }
       if (toggleMilestoneAttr) {
         const [goalId, milestoneId] = toggleMilestoneAttr.split(':');
@@ -1386,7 +1433,11 @@ const Progress = (() => {
             category = (newCatInput ? newCatInput.value.trim() : '');
             if (!category) return;
           }
-          await DB.put('trainingReferences', { id: DB.uid(), title, body, category, order: cache.trainingReferences.length, createdAt: Date.now() });
+          const songSelect = document.getElementById('new-reference-song-select');
+          const timeInput = document.getElementById('new-reference-song-time');
+          const linkedSongId = songSelect.value || null;
+          const linkedTime = linkedSongId ? (parseTimeInput(timeInput.value) ?? 0) : null;
+          await DB.put('trainingReferences', { id: DB.uid(), title, body, category, linkedSongId, linkedTime, order: cache.trainingReferences.length, createdAt: Date.now() });
           state.trainingReferenceNewCategoryValue = category;
           state.referenceAddFormOpen = false;
           return render();
@@ -1418,7 +1469,11 @@ const Progress = (() => {
             category = (newCatInput ? newCatInput.value.trim() : '');
             if (!category) return;
           }
-          await DB.put('trainingReferences', { ...ref, title, body, category });
+          const songSelect = document.getElementById('edit-reference-song-select');
+          const timeInput = document.getElementById('edit-reference-song-time');
+          const linkedSongId = songSelect.value || null;
+          const linkedTime = linkedSongId ? (parseTimeInput(timeInput.value) ?? 0) : null;
+          await DB.put('trainingReferences', { ...ref, title, body, category, linkedSongId, linkedTime });
           state.editingReferenceId = null;
           return render();
         }

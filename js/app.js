@@ -24,6 +24,13 @@ async function startApp() {
     if (target === 'countdown') Countdown.onShow();
   }
 
+  // Exposed so another screen (a Reference note linking to a video moment) can switch tabs
+  // the same way a real tab click would, including remembering it as the active tab.
+  window.switchAppTab = (target) => {
+    activateTab(target);
+    try { localStorage.setItem(ACTIVE_TAB_KEY, target); } catch (err) { /* ignore */ }
+  };
+
   tabs.forEach((tab) => {
     tab.addEventListener('click', () => {
       const target = tab.dataset.screen;
