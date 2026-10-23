@@ -475,6 +475,11 @@ const Music = (() => {
 
     el.waveWrap.addEventListener('pointerdown', (e) => {
       if (!currentSong) return;
+      // The mirror button floats on top of the video inside this same wrap -- without this
+      // guard, a tap on it also bubbles up as a scrub/seek (and the pointer capture below
+      // swallows the button's own click), so pressing it appeared to just seek the video
+      // instead of mirroring it.
+      if (e.target.closest('.btn-video-overlay')) return;
       scrubbing = true;
       el.scrubMarker.hidden = false;
       el.scrubTooltip.hidden = false;
