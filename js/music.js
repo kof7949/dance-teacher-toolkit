@@ -186,6 +186,12 @@ const Music = (() => {
   }
 
   async function loadSong(id) {
+    // Removing a media element's src is supposed to stop it, but that's a side effect of the
+    // browser's resource-selection algorithm rather than a guarantee -- explicitly pausing
+    // both elements here is what actually stops whichever one (video or audio) was mid-playback
+    // before switching songs, so the old track can't keep playing underneath the new one.
+    el.audio.pause();
+    el.video.pause();
     if (!id) {
       currentSong = null;
       el.audio.removeAttribute('src');
