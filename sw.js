@@ -3,22 +3,22 @@
 // own bookkeeping -- it's what makes a deploy's JS/CSS a *new URL* that neither the browser's
 // own HTTP cache nor GitHub Pages' CDN can keep serving stale for their own cache lifetime
 // (several minutes) after a fresh deploy or a forced "Check for updates".
-const CACHE_NAME = 'dance-toolkit-v109';
+const CACHE_NAME = 'dance-toolkit-v110';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/styles.css?v=109',
-  './js/lock.js?v=109',
+  './css/styles.css?v=110',
+  './js/lock.js?v=110',
   './js/vendor/jspdf.umd.min.js',
-  './js/db.js?v=109',
-  './js/seed.js?v=109',
-  './js/music.js?v=109',
-  './js/progress.js?v=109',
-  './js/formation.js?v=109',
-  './js/metronome.js?v=109',
-  './js/countdown.js?v=109',
-  './js/app.js?v=109',
+  './js/db.js?v=110',
+  './js/seed.js?v=110',
+  './js/music.js?v=110',
+  './js/progress.js?v=110',
+  './js/formation.js?v=110',
+  './js/metronome.js?v=110',
+  './js/countdown.js?v=110',
+  './js/app.js?v=110',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './audio/groove/kick-vintage.wav',

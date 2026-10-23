@@ -124,6 +124,8 @@ const Music = (() => {
     el.beatHud = document.getElementById('beat-hud');
     el.beatHudValue = document.getElementById('beat-hud-value');
     el.btnToggleBeatHud = document.getElementById('btn-toggle-beathud');
+    el.beatHudPanel = document.getElementById('beat-hud-panel');
+    el.beatHudPanelList = document.getElementById('beat-hud-panel-list');
   }
 
   async function decodePeaks(arrayBuffer, buckets = 320) {
@@ -338,6 +340,7 @@ const Music = (() => {
   function renderTags(tags) {
     currentTags = tags;
     updateBeatHudVisibility();
+    if (beatHudPanelOpen) renderBeatHudPanelList();
     if (!tags.length) {
       el.tagList.innerHTML = '<div class="empty-state">No count markers yet. Play the song and tap a number above.</div>';
       return;
@@ -354,12 +357,20 @@ const Music = (() => {
   }
 
   // Beat HUD: a small floating, draggable counter so a dancer can glance at the current
-  // count without looking back at the (often off-screen, while dancing) tag list.
+  // count without looking back at the (often off-screen, while dancing) tag list. Tapping it
+  // (as opposed to dragging it) opens a jump list of every saved count, so a count can be
+  // selected without scrolling back to the on-page list at all.
+  let beatHudPanelOpen = false;
+
   function updateBeatHudVisibility() {
     const shouldShow = beatHud.visible && currentTags.length > 0;
     el.beatHud.hidden = !shouldShow;
     el.btnToggleBeatHud.textContent = beatHud.visible ? '👁 Hide floating counter' : '👁 Show floating counter';
-    if (shouldShow) updateBeatHudValue(activeMedia().currentTime);
+    if (shouldShow) {
+      updateBeatHudValue(activeMedia().currentTime);
+    } else {
+      closeBeatHudPanel();
+    }
   }
 
   function updateBeatHudValue(currentTime) {
@@ -385,12 +396,69 @@ const Music = (() => {
     return [Math.min(Math.max(0, x), maxX), Math.min(Math.max(0, y), maxY)];
   }
 
+  function renderBeatHudPanelList() {
+    if (!currentTags.length) {
+      el.beatHudPanelList.innerHTML = '<div class="empty-state">No counts yet</div>';
+      return;
+    }
+    el.beatHudPanelList.innerHTML = currentTags.map((t) => `
+      <button class="beat-hud-panel-item" data-hud-seek="${t.time}">
+        <span>${escapeHtml(t.label)}</span>
+        <span class="tag-time">${fmtTime(t.time)}</span>
+      </button>
+    `).join('');
+  }
+
+  // Anchored to wherever the HUD currently sits (it's draggable), flipping above/below and
+  // left/right so the panel never runs off the edge of the screen.
+  function positionBeatHudPanel() {
+    const hudRect = el.beatHud.getBoundingClientRect();
+    const panel = el.beatHudPanel;
+    const margin = 8;
+    const panelRect = panel.getBoundingClientRect();
+    let left = hudRect.left + hudRect.width / 2 < window.innerWidth / 2
+      ? hudRect.left
+      : hudRect.right - panelRect.width;
+    left = Math.min(Math.max(margin, left), window.innerWidth - panelRect.width - margin);
+    const spaceAbove = hudRect.top;
+    const spaceBelow = window.innerHeight - hudRect.bottom;
+    let top = (spaceAbove >= panelRect.height + margin || spaceAbove > spaceBelow)
+      ? hudRect.top - panelRect.height - margin
+      : hudRect.bottom + margin;
+    top = Math.min(Math.max(margin, top), window.innerHeight - panelRect.height - margin);
+    panel.style.left = left + 'px';
+    panel.style.top = top + 'px';
+  }
+
+  function openBeatHudPanel() {
+    renderBeatHudPanelList();
+    el.beatHudPanel.hidden = false;
+    beatHudPanelOpen = true;
+    positionBeatHudPanel();
+  }
+
+  function closeBeatHudPanel() {
+    beatHudPanelOpen = false;
+    el.beatHudPanel.hidden = true;
+  }
+
+  function toggleBeatHudPanel() {
+    if (beatHudPanelOpen) closeBeatHudPanel(); else openBeatHudPanel();
+  }
+
   function wireBeatHudDrag() {
     let dragging = false;
+    let moved = false;
     let offsetX = 0;
     let offsetY = 0;
+    let downX = 0;
+    let downY = 0;
+    const DRAG_THRESHOLD = 6;
     el.beatHud.addEventListener('pointerdown', (e) => {
       dragging = true;
+      moved = false;
+      downX = e.clientX;
+      downY = e.clientY;
       el.beatHud.classList.add('dragging');
       const rect = el.beatHud.getBoundingClientRect();
       offsetX = e.clientX - rect.left;
@@ -399,6 +467,11 @@ const Music = (() => {
     });
     el.beatHud.addEventListener('pointermove', (e) => {
       if (!dragging) return;
+      if (!moved) {
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) < DRAG_THRESHOLD) return;
+        moved = true;
+        closeBeatHudPanel();
+      }
       const [x, y] = clampHudPosition(e.clientX - offsetX, e.clientY - offsetY);
       el.beatHud.style.left = x + 'px';
       el.beatHud.style.top = y + 'px';
@@ -409,12 +482,19 @@ const Music = (() => {
       if (!dragging) return;
       dragging = false;
       el.beatHud.classList.remove('dragging');
-      beatHud.x = parseFloat(el.beatHud.style.left);
-      beatHud.y = parseFloat(el.beatHud.style.top);
-      saveBeatHudSettings();
+      if (moved) {
+        beatHud.x = parseFloat(el.beatHud.style.left);
+        beatHud.y = parseFloat(el.beatHud.style.top);
+        saveBeatHudSettings();
+      } else {
+        toggleBeatHudPanel();
+      }
     };
     el.beatHud.addEventListener('pointerup', endDrag);
-    el.beatHud.addEventListener('pointercancel', endDrag);
+    el.beatHud.addEventListener('pointercancel', () => {
+      dragging = false;
+      el.beatHud.classList.remove('dragging');
+    });
   }
 
   async function addTag(label) {
@@ -678,6 +758,25 @@ const Music = (() => {
       updateBeatHudVisibility();
     });
     wireBeatHudDrag();
+
+    el.beatHudPanelList.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-hud-seek]');
+      if (!btn) return;
+      activeMedia().currentTime = Number(btn.dataset.hudSeek);
+      // The HUD itself floats above everything, but the video it controls doesn't -- scroll
+      // back up so the jump this panel exists to make is actually visible.
+      if (currentSong && currentSong.kind === 'video') {
+        document.getElementById('main').scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    });
+    document.addEventListener('pointerdown', (e) => {
+      if (!beatHudPanelOpen) return;
+      if (el.beatHudPanel.contains(e.target) || el.beatHud.contains(e.target)) return;
+      closeBeatHudPanel();
+    });
+    window.addEventListener('resize', () => {
+      if (beatHudPanelOpen) positionBeatHudPanel();
+    });
   }
 
   async function init() {
