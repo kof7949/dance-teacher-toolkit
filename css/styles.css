@@ -797,6 +797,15 @@ main {
   gap: 12px;
   padding: calc(8px + var(--safe-top)) 12px 8px;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.65), transparent);
+  transition: opacity 0.25s ease;
+}
+/* Auto-hide (YouTube-style): js adds/removes this on the shell after a few seconds of no
+   taps, while playing. pointer-events: none lets a tap on the now-invisible bars fall through
+   to the video/shell underneath, which is exactly what wakes the controls back up. */
+.video-fullscreen-shell.vfs-idle .vfs-topbar,
+.video-fullscreen-shell.vfs-idle .vfs-controls {
+  opacity: 0;
+  pointer-events: none;
 }
 .vfs-rotate-hint {
   color: var(--text-dim);
@@ -836,6 +845,7 @@ main {
   gap: 10px;
   padding: 10px 12px calc(10px + var(--safe-bottom));
   background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+  transition: opacity 0.25s ease;
 }
 .vfs-time { font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 .btn-video-overlay-ctrl {

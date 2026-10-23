@@ -445,10 +445,27 @@ const Music = (() => {
     ]);
   }
 
+  // Auto-hide the fullscreen topbar/controls after a few idle seconds, YouTube-style. Any tap
+  // inside the shell (a button, a scrub, or the video itself once the bars are invisible and
+  // pointer-events: none lets the tap fall through) calls this to reveal them and restart the
+  // countdown. The timeout only actually hides them if still playing, so pausing leaves them
+  // on screen indefinitely until playback resumes and the viewer goes idle again.
+  const VFS_IDLE_DELAY = 3000;
+  let vfsIdleTimer = null;
+
+  function wakeVfsControls() {
+    el.videoFullscreenShell.classList.remove('vfs-idle');
+    clearTimeout(vfsIdleTimer);
+    vfsIdleTimer = setTimeout(() => {
+      if (!activeMedia().paused) el.videoFullscreenShell.classList.add('vfs-idle');
+    }, VFS_IDLE_DELAY);
+  }
+
   async function enterVideoFullscreen() {
     el.videoFullscreenShell.hidden = false;
     el.videoFullscreenSlot.prepend(el.waveWrap);
     el.vfsRotateHint.hidden = true;
+    wakeVfsControls();
     try {
       await withTimeout(el.videoFullscreenShell.requestFullscreen(), 1500);
     } catch (err) { /* continue as an in-page overlay */ }
@@ -466,6 +483,8 @@ const Music = (() => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (err) { /* ignore */ }
     el.videoFullscreenShell.hidden = true;
+    clearTimeout(vfsIdleTimer);
+    el.videoFullscreenShell.classList.remove('vfs-idle');
   }
 
   function wireEvents() {
@@ -630,6 +649,7 @@ const Music = (() => {
     el.btnExitVideoFullscreen.addEventListener('click', exitVideoFullscreen);
     el.fsBtnPlay.addEventListener('click', () => el.btnPlay.click());
     el.fsBtnSpeed.addEventListener('click', cycleSpeed);
+    el.videoFullscreenShell.addEventListener('pointerdown', wakeVfsControls);
 
     window.addEventListener('resize', redrawWaveformIfNeeded);
 
