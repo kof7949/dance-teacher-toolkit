@@ -559,6 +559,13 @@ const Music = (() => {
 
     el.waveWrap.addEventListener('pointerdown', (e) => {
       if (!currentSong) return;
+      // The first tap while fullscreen's controls are hidden should only reveal them again,
+      // not also scrub -- otherwise a tap meant to bring the controls back jumps the video to
+      // wherever on screen the finger happened to land.
+      if (!el.videoFullscreenShell.hidden && el.videoFullscreenShell.classList.contains('vfs-idle')) {
+        wakeVfsControls();
+        return;
+      }
       scrubbing = true;
       el.scrubMarker.hidden = false;
       el.scrubTooltip.hidden = false;
