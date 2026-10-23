@@ -635,6 +635,12 @@ const Music = (() => {
       const seekBtn = e.target.closest('[data-seek]');
       if (seekBtn) {
         activeMedia().currentTime = Number(seekBtn.dataset.seek);
+        // The count list sits well below the player, so jumping to a marked moment would
+        // otherwise leave the video scrolled off-screen -- scroll back up to it so the viewer
+        // can actually watch what's happening at that count.
+        if (currentSong && currentSong.kind === 'video') {
+          document.getElementById('main').scrollTo({ top: 0, behavior: 'smooth' });
+        }
         return;
       }
       const delBtn = e.target.closest('[data-del]');
