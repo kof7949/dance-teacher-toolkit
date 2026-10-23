@@ -201,6 +201,15 @@ const Music = (() => {
     else media.addEventListener('loadedmetadata', seek, { once: true });
   }
 
+  // Lets another screen (the Reference note form) grab whatever song is currently loaded
+  // here and its exact playhead position, without the user needing to note it down and
+  // type it in by hand. The media elements are persistent across tab switches, so this
+  // still reflects reality even if Music & Count isn't the visible screen right now.
+  function getCurrentPosition() {
+    if (!currentSong) return null;
+    return { songId: currentSong.id, time: activeMedia().currentTime };
+  }
+
   function updateNudgeButtonsState() {
     el.nudgeInMinus.disabled = loopStart == null;
     el.nudgeInPlus.disabled = loopStart == null;
@@ -547,5 +556,5 @@ const Music = (() => {
     await populateSongSelect();
   }
 
-  return { init, onShow: redrawWaveformIfNeeded, loadAndSeek };
+  return { init, onShow: redrawWaveformIfNeeded, loadAndSeek, getCurrentPosition };
 })();

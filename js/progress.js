@@ -589,6 +589,10 @@ const Progress = (() => {
           </select>
           <input type="text" id="edit-reference-song-time" placeholder="Timestamp, e.g. 1:23" style="flex:0 0 120px;" value="${r.linkedSongId ? fmtTimeShort(r.linkedTime) : ''}" />
         </div>
+        <div class="tag-buttons" style="margin-bottom:0;">
+          <button class="btn btn-small btn-text" data-action="use-edit-reference-current-position" type="button">📍 Use current position from Music &amp; Count</button>
+          <span id="edit-reference-position-hint" class="sub"></span>
+        </div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-small" data-action="save-reference-edit" data-id="${r.id}">Save</button>
           <button class="btn btn-small btn-text" data-action="cancel-reference-edit">Cancel</button>
@@ -688,6 +692,10 @@ const Progress = (() => {
             ${cache.songs.map((s) => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('')}
           </select>
           <input type="text" id="new-reference-song-time" placeholder="Timestamp, e.g. 1:23" style="flex:0 0 120px;" />
+        </div>
+        <div class="tag-buttons" style="margin-bottom:14px;">
+          <button class="btn btn-small btn-text" data-action="use-reference-current-position" type="button">📍 Use current position from Music &amp; Count</button>
+          <span id="new-reference-position-hint" class="sub"></span>
         </div>
         <button class="btn btn-small" data-action="add-reference" style="margin-bottom:16px;">Add note</button>
       ` : ''}
@@ -1398,6 +1406,22 @@ const Progress = (() => {
         case 'toggle-reference-add-form':
           state.referenceAddFormOpen = !state.referenceAddFormOpen;
           return render();
+        case 'use-reference-current-position':
+        case 'use-edit-reference-current-position': {
+          const isEdit = action === 'use-edit-reference-current-position';
+          const prefix = isEdit ? 'edit-reference' : 'new-reference';
+          const hint = document.getElementById(`${prefix}-position-hint`);
+          const pos = Music.getCurrentPosition();
+          if (!pos) {
+            if (hint) hint.textContent = 'No song loaded in Music & Count yet — open it, pause where you want, then come back here.';
+            return;
+          }
+          const song = cache.songs.find((s) => s.id === pos.songId);
+          document.getElementById(`${prefix}-song-select`).value = pos.songId;
+          document.getElementById(`${prefix}-song-time`).value = fmtTimeShort(pos.time);
+          if (hint) hint.textContent = `Captured ${fmtTimeShort(pos.time)}${song ? ' in ' + song.name : ''}.`;
+          return;
+        }
         case 'add-training-skill': {
           const catSelect = document.getElementById('new-training-skill-category-select');
           const nameInput = document.getElementById('new-training-skill-name');
