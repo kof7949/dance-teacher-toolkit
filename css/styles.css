@@ -222,6 +222,35 @@ main {
   background: var(--accent-2);
 }
 
+.btn-video-overlay {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 36px; height: 36px; border: none; border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 1.1rem; cursor: pointer;
+}
+.video-progress-track {
+  position: absolute; left: 0; right: 0; bottom: 10px; height: 4px;
+  background: rgba(255, 255, 255, 0.35); border-radius: 2px; pointer-events: none;
+}
+.video-progress-fill {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 0%;
+  background: var(--accent); border-radius: 2px;
+}
+.video-progress-handle {
+  position: absolute; top: 50%; left: 0%; width: 12px; height: 12px;
+  background: #fff; border-radius: 50%; transform: translate(-50%, -50%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.video-player.mirrored { transform: scaleX(-1); }
+
+/* The playhead/loop/scrub overlays default to spanning the whole waveform-wrap height,
+   which is fine over the waveform but would otherwise cross directly over video content --
+   confine them to a thin strip near the new bottom progress bar instead. */
+.waveform-wrap.video-mode .playhead { display: none; }
+.waveform-wrap.video-mode .loop-region,
+.waveform-wrap.video-mode .scrub-marker { top: auto; bottom: 10px; height: 4px; }
+.waveform-wrap.video-mode .loop-marker { top: auto; bottom: 8px; height: 10px; }
+.waveform-wrap.video-mode .loop-marker-label { top: auto; bottom: 10px; }
+
 .time-row {
   display: flex; justify-content: space-between;
   font-variant-numeric: tabular-nums;

@@ -21,6 +21,13 @@ const Music = (() => {
     try { localStorage.setItem(BEAT_HUD_SETTINGS_KEY, JSON.stringify(beatHud)); } catch (err) { /* ignore */ }
   }
 
+  const VIDEO_MIRROR_KEY = 'dance-toolkit-video-mirror';
+  let videoMirrored = false;
+
+  function loadVideoMirrorSetting() {
+    try { videoMirrored = localStorage.getItem(VIDEO_MIRROR_KEY) === '1'; } catch (err) { /* ignore */ }
+  }
+
   function activeMedia() {
     return currentSong && currentSong.kind === 'video' ? el.video : el.audio;
   }
@@ -79,6 +86,10 @@ const Music = (() => {
     el.tagList = document.getElementById('tag-list');
     el.audio = document.getElementById('audio-player');
     el.video = document.getElementById('video-player');
+    el.btnMirrorVideo = document.getElementById('btn-mirror-video');
+    el.videoProgressTrack = document.getElementById('video-progress-track');
+    el.videoProgressFill = document.getElementById('video-progress-fill');
+    el.videoProgressHandle = document.getElementById('video-progress-handle');
     el.btnDeleteSong = document.getElementById('btn-delete-song');
     el.nudgeInMinus = document.getElementById('btn-nudge-in-minus');
     el.nudgeInPlus = document.getElementById('btn-nudge-in-plus');
@@ -158,6 +169,9 @@ const Music = (() => {
       el.video.hidden = true;
       el.waveform.hidden = false;
       el.btnPlay.disabled = true;
+      el.waveWrap.classList.remove('video-mode');
+      el.btnMirrorVideo.hidden = true;
+      el.videoProgressTrack.hidden = true;
       drawWaveform([]);
       renderTags([]);
       return;
@@ -177,6 +191,10 @@ const Music = (() => {
     media.webkitPreservesPitch = true;
     el.video.hidden = !isVideo;
     el.waveform.hidden = isVideo;
+    el.waveWrap.classList.toggle('video-mode', isVideo);
+    el.btnMirrorVideo.hidden = !isVideo;
+    el.videoProgressTrack.hidden = !isVideo;
+    el.video.classList.toggle('mirrored', videoMirrored);
     el.btnPlay.disabled = false;
     el.btnPlay.textContent = '▶';
     loopStart = null;
@@ -435,8 +453,13 @@ const Music = (() => {
       el.timeCurrent.textContent = fmtTime(media.currentTime);
       if (currentSong && currentSong.duration) {
         const pct = (media.currentTime / currentSong.duration) * 100;
-        el.playhead.style.left = pct + '%';
-        el.playhead.hidden = false;
+        if (currentSong.kind === 'video') {
+          el.videoProgressFill.style.width = pct + '%';
+          el.videoProgressHandle.style.left = pct + '%';
+        } else {
+          el.playhead.style.left = pct + '%';
+          el.playhead.hidden = false;
+        }
       }
       if (el.loopEnabled.checked && loopStart != null && loopEnd != null) {
         const hi = Math.max(loopStart, loopEnd);
@@ -536,6 +559,12 @@ const Music = (() => {
       await loadSong('');
     });
 
+    el.btnMirrorVideo.addEventListener('click', () => {
+      videoMirrored = !videoMirrored;
+      try { localStorage.setItem(VIDEO_MIRROR_KEY, videoMirrored ? '1' : '0'); } catch (err) { /* ignore */ }
+      el.video.classList.toggle('mirrored', videoMirrored);
+    });
+
     window.addEventListener('resize', redrawWaveformIfNeeded);
 
     el.btnToggleBeatHud.addEventListener('click', () => {
@@ -553,6 +582,8 @@ const Music = (() => {
     loadBeatHudSettings();
     applyBeatHudPosition();
     updateBeatHudVisibility();
+    loadVideoMirrorSetting();
+    el.video.classList.toggle('mirrored', videoMirrored);
     await populateSongSelect();
   }
 

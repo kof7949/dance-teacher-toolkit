@@ -60,6 +60,11 @@
         <div class="waveform-wrap">
           <canvas id="waveform" height="130"></canvas>
           <video id="video-player" class="video-player" playsinline hidden></video>
+          <button id="btn-mirror-video" class="btn-video-overlay" type="button" hidden title="Mirror the video">🪞</button>
+          <div id="video-progress-track" class="video-progress-track" hidden>
+            <div id="video-progress-fill" class="video-progress-fill"></div>
+            <div id="video-progress-handle" class="video-progress-handle"></div>
+          </div>
           <div id="loop-region" class="loop-region" hidden></div>
           <div id="loop-in-marker" class="loop-marker" hidden><span class="loop-marker-label">In</span></div>
           <div id="loop-out-marker" class="loop-marker" hidden><span class="loop-marker-label">Out</span></div>
