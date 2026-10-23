@@ -73,15 +73,19 @@ async function startApp() {
   }
 
   window.forceAppUpdate = async function forceAppUpdate() {
-    if (!('serviceWorker' in navigator)) {
-      window.location.reload();
-      return;
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+      const names = await caches.keys();
+      for (const name of names) await caches.delete(name);
     }
-    const regs = await navigator.serviceWorker.getRegistrations();
-    for (const reg of regs) await reg.unregister();
-    const names = await caches.keys();
-    for (const name of names) await caches.delete(name);
-    window.location.reload();
+    // A plain reload() is still a "normal" navigation: with the service worker and its cache
+    // gone, the next request can still be served stale by the browser's own HTTP cache (or
+    // GitHub Pages' CDN cache) for several minutes, since nothing about the URL changed. A
+    // cache-busting query string makes this a URL the browser has never seen, forcing a real
+    // network fetch of the latest index.html (which in turn references versioned, equally
+    // cache-proof ?v= asset URLs) instead of waiting out that cache's lifetime.
+    window.location.href = window.location.pathname + '?cachebust=' + Date.now();
   };
 }
 

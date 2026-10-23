@@ -1,19 +1,24 @@
-const CACHE_NAME = 'dance-toolkit-v103';
+// Bump this on every deploy, and bump the matching ?v= query string on every local script/
+// stylesheet tag in index.html at the same time. The version query isn't just for this cache's
+// own bookkeeping -- it's what makes a deploy's JS/CSS a *new URL* that neither the browser's
+// own HTTP cache nor GitHub Pages' CDN can keep serving stale for their own cache lifetime
+// (several minutes) after a fresh deploy or a forced "Check for updates".
+const CACHE_NAME = 'dance-toolkit-v104';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './css/styles.css',
-  './js/lock.js',
+  './css/styles.css?v=104',
+  './js/lock.js?v=104',
   './js/vendor/jspdf.umd.min.js',
-  './js/db.js',
-  './js/seed.js',
-  './js/music.js',
-  './js/progress.js',
-  './js/formation.js',
-  './js/metronome.js',
-  './js/countdown.js',
-  './js/app.js',
+  './js/db.js?v=104',
+  './js/seed.js?v=104',
+  './js/music.js?v=104',
+  './js/progress.js?v=104',
+  './js/formation.js?v=104',
+  './js/metronome.js?v=104',
+  './js/countdown.js?v=104',
+  './js/app.js?v=104',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './audio/groove/kick-vintage.wav',
@@ -36,7 +41,10 @@ self.addEventListener('install', (event) => {
       // Cache each asset individually rather than cache.addAll(), which aborts the *entire*
       // precache the moment a single request fails (e.g. one dropped packet on a flaky
       // connection) -- that would otherwise leave the app with no offline cache at all.
-      return Promise.all(ASSETS.map((url) => cache.add(url).catch((err) => {
+      // {cache: 'reload'} bypasses the browser's own HTTP cache for these fetches -- without
+      // it, the unversioned './'/'./index.html' entries could precache an HTTP-cached stale
+      // shell even though CACHE_NAME just bumped.
+      return Promise.all(ASSETS.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch((err) => {
         console.warn('[sw] failed to precache', url, err);
       })));
     }).then(() => self.skipWaiting())
