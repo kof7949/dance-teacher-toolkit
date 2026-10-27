@@ -677,6 +677,155 @@ const Progress = (() => {
     return pinnedHtml + groupsHtml;
   }
 
+  // Reference export: draws onto an offscreen canvas rather than using jsPDF's own text
+  // drawing, the same technique Formation's routine PDF uses -- jsPDF's built-in fonts have
+  // no CJK glyphs, and a note's title/body is free-form text that could contain any language,
+  // so plain jsPDF text could silently render blank.
+  const REFERENCE_PDF_FONT_STACK = "'Noto Sans SC','Microsoft YaHei','PingFang SC','Heiti SC',Helvetica,Arial,sans-serif";
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    const lines = [];
+    text.split('\n').forEach((para) => {
+      if (!para) { lines.push(''); return; }
+      const words = para.split(' ');
+      let line = '';
+      words.forEach((word) => {
+        const test = line ? `${line} ${word}` : word;
+        if (line && ctx.measureText(test).width > maxWidth) {
+          lines.push(line);
+          line = word;
+        } else {
+          line = test;
+        }
+      });
+      if (line) lines.push(line);
+    });
+    return lines;
+  }
+
+  function generateReferencePdf() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const marginX = 48;
+    const marginTop = 56;
+    const marginBottom = 48;
+    const contentWidth = pageWidth - marginX * 2;
+    const scale = 2; // canvas px per pt, for crisp text once embedded in the PDF
+
+    let canvas, ctx, y;
+    const pageCanvases = [];
+
+    function newPageCanvas() {
+      canvas = document.createElement('canvas');
+      canvas.width = pageWidth * scale;
+      canvas.height = pageHeight * scale;
+      ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, pageWidth, pageHeight);
+      ctx.textBaseline = 'alphabetic';
+      y = marginTop;
+    }
+
+    function ensureSpace(lineHeight) {
+      if (y + lineHeight > pageHeight - marginBottom) {
+        pageCanvases.push(canvas);
+        newPageCanvas();
+      }
+    }
+
+    function setFont(weight, size) {
+      ctx.font = `${weight} ${size}px ${REFERENCE_PDF_FONT_STACK}`;
+    }
+
+    newPageCanvas();
+
+    setFont('bold', 16);
+    ctx.fillStyle = '#7c3aed';
+    ctx.textAlign = 'left';
+    ctx.fillText('Dance Teacher Toolkit — Reference Notes', marginX, y);
+    y += 20;
+
+    setFont('normal', 9.5);
+    ctx.fillStyle = '#6e6e6e';
+    ctx.fillText(new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }), marginX, y);
+    y += 18;
+    ctx.strokeStyle = '#dcdcdc';
+    ctx.beginPath();
+    ctx.moveTo(marginX, y);
+    ctx.lineTo(pageWidth - marginX, y);
+    ctx.stroke();
+    y += 22;
+
+    const pinned = cache.trainingReferences.filter((r) => r.pinned);
+    const rest = cache.trainingReferences.filter((r) => !r.pinned);
+    const groups = {};
+    rest.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
+    const sections = [];
+    if (pinned.length) sections.push({ title: '📌 Pinned', notes: pinned });
+    Object.keys(groups).forEach((cat) => sections.push({ title: cat, notes: groups[cat] }));
+
+    if (!sections.length) {
+      setFont('italic', 11);
+      ctx.fillStyle = '#141414';
+      ctx.fillText('No reference notes yet.', marginX, y);
+    }
+
+    sections.forEach((section) => {
+      ensureSpace(24);
+      setFont('bold', 12.5);
+      ctx.fillStyle = '#ec4899';
+      ctx.fillText(section.title, marginX, y);
+      y += 18;
+
+      section.notes.forEach((note) => {
+        const linkedSong = note.linkedSongId ? cache.songs.find((s) => s.id === note.linkedSongId) : null;
+        setFont('normal', 10);
+        const bodyLines = wrapCanvasText(ctx, note.body, contentWidth);
+        // Keep a note's title glued to at least its first body line, so a title never ends up
+        // stranded alone at the very bottom of a page.
+        const headerHeight = 15 + (linkedSong ? 14 : 0);
+        ensureSpace(headerHeight + 13);
+
+        setFont('bold', 11);
+        ctx.fillStyle = '#141414';
+        ctx.fillText(note.title, marginX, y);
+        const titleWidth = ctx.measureText(note.title).width;
+        setFont('normal', 9);
+        ctx.fillStyle = '#6e6e6e';
+        ctx.fillText(`  ·  ${fmtDateWithYear(note.createdAt)}`, marginX + titleWidth, y);
+        y += 15;
+
+        if (linkedSong) {
+          setFont('italic', 9.5);
+          ctx.fillStyle = '#7c3aed';
+          ctx.fillText(`▶ ${fmtTimeShort(note.linkedTime)} · ${linkedSong.name}`, marginX, y);
+          y += 14;
+        }
+
+        setFont('normal', 10);
+        ctx.fillStyle = '#2a2a2a';
+        bodyLines.forEach((line) => {
+          ensureSpace(13);
+          ctx.fillText(line, marginX, y);
+          y += 13;
+        });
+        y += 10;
+      });
+      y += 6;
+    });
+
+    pageCanvases.push(canvas);
+    pageCanvases.forEach((pg, idx) => {
+      if (idx > 0) doc.addPage();
+      doc.addImage(pg.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, pageHeight);
+    });
+
+    return doc;
+  }
+
   function renderTrainingReference() {
     const catNames = referenceCategoryNames();
     const selectedCatValue = (state.trainingReferenceNewCategoryValue && (catNames.includes(state.trainingReferenceNewCategoryValue) || state.trainingReferenceNewCategoryValue === '__new__'))
@@ -726,6 +875,10 @@ const Progress = (() => {
       <div class="add-row">
         <input type="text" id="reference-search" placeholder="🔍 Search your notes…" value="${escapeHtml(state.trainingReferenceSearchQuery || '')}" />
       </div>
+      ${cache.trainingReferences.length ? `
+        <button class="btn btn-small btn-text" data-action="export-reference-pdf" style="margin-bottom:10px;">⬇ Export notes as PDF</button>
+        <div id="reference-export-output"></div>
+      ` : ''}
       <div id="reference-list-container">${referenceRowsHtml(state.trainingReferenceSearchQuery)}</div>
     `;
   }
@@ -1508,6 +1661,24 @@ const Progress = (() => {
           ref.pinned = !ref.pinned;
           await DB.put('trainingReferences', ref);
           return render();
+        }
+        case 'export-reference-pdf': {
+          const doc = generateReferencePdf();
+          const blob = doc.output('blob');
+          const fileName = 'reference_notes.pdf';
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = fileName;
+          document.body.appendChild(a); a.click(); a.remove();
+          const out = document.getElementById('reference-export-output');
+          if (out) {
+            out.innerHTML = `
+              <div class="summary-box" style="padding:0;overflow:hidden;margin-top:4px;margin-bottom:10px;">
+                <iframe src="${url}" style="width:100%;height:420px;border:0;display:block;"></iframe>
+              </div>
+            `;
+          }
+          return;
         }
         case 'save-reference-edit': {
           const id = e.target.closest('[data-id]').dataset.id;
