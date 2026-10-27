@@ -1895,6 +1895,13 @@ const Progress = (() => {
         }
       }
     });
+
+    document.addEventListener('pointerdown', (e) => {
+      if (!state.referenceMenuOpenId) return;
+      if (e.target.closest('.reference-card-menu') || e.target.closest('[data-action="toggle-reference-menu"]')) return;
+      state.referenceMenuOpenId = null;
+      render();
+    });
   }
 
   function loadProgressMode() {
