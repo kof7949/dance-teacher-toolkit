@@ -636,6 +636,7 @@ const Progress = (() => {
           <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
           <div style="display:flex;gap:4px;flex-shrink:0;">
             <button class="btn btn-small btn-text" data-action="toggle-reference-pin" data-id="${r.id}" title="${r.pinned ? 'Unpin' : 'Pin to top'}">${r.pinned ? '★' : '☆'}</button>
+            <button class="btn btn-small btn-text" data-action="export-reference-pdf-one" data-id="${r.id}" title="Export this note as PDF">⬇</button>
             <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
             <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
           </div>
@@ -703,7 +704,7 @@ const Progress = (() => {
     return lines;
   }
 
-  function generateReferencePdf() {
+  function generateReferencePdf(notesOverride, headerLabel) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'pt', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -745,7 +746,7 @@ const Progress = (() => {
     setFont('bold', 16);
     ctx.fillStyle = '#7c3aed';
     ctx.textAlign = 'left';
-    ctx.fillText('Dance Teacher Toolkit — Reference Notes', marginX, y);
+    ctx.fillText(headerLabel || 'Dance Teacher Toolkit — Reference Notes', marginX, y);
     y += 20;
 
     setFont('normal', 9.5);
@@ -759,13 +760,20 @@ const Progress = (() => {
     ctx.stroke();
     y += 22;
 
-    const pinned = cache.trainingReferences.filter((r) => r.pinned);
-    const rest = cache.trainingReferences.filter((r) => !r.pinned);
-    const groups = {};
-    rest.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
-    const sections = [];
-    if (pinned.length) sections.push({ title: '📌 Pinned', notes: pinned });
-    Object.keys(groups).forEach((cat) => sections.push({ title: cat, notes: groups[cat] }));
+    // Exporting a single note (or any explicit subset) skips the Pinned/category grouping --
+    // there's nothing to group, so it's just one section with no section-title bar.
+    let sections;
+    if (notesOverride) {
+      sections = notesOverride.length ? [{ title: null, notes: notesOverride }] : [];
+    } else {
+      const pinned = cache.trainingReferences.filter((r) => r.pinned);
+      const rest = cache.trainingReferences.filter((r) => !r.pinned);
+      const groups = {};
+      rest.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
+      sections = [];
+      if (pinned.length) sections.push({ title: '📌 Pinned', notes: pinned });
+      Object.keys(groups).forEach((cat) => sections.push({ title: cat, notes: groups[cat] }));
+    }
 
     if (!sections.length) {
       setFont('italic', 11);
@@ -774,11 +782,13 @@ const Progress = (() => {
     }
 
     sections.forEach((section) => {
-      ensureSpace(24);
-      setFont('bold', 12.5);
-      ctx.fillStyle = '#ec4899';
-      ctx.fillText(section.title, marginX, y);
-      y += 18;
+      if (section.title) {
+        ensureSpace(24);
+        setFont('bold', 12.5);
+        ctx.fillStyle = '#ec4899';
+        ctx.fillText(section.title, marginX, y);
+        y += 18;
+      }
 
       section.notes.forEach((note) => {
         const linkedSong = note.linkedSongId ? cache.songs.find((s) => s.id === note.linkedSongId) : null;
@@ -1677,6 +1687,29 @@ const Progress = (() => {
                 <iframe src="${url}" style="width:100%;height:420px;border:0;display:block;"></iframe>
               </div>
             `;
+          }
+          return;
+        }
+        case 'export-reference-pdf-one': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const ref = cache.trainingReferences.find((r) => r.id === id);
+          if (!ref) return;
+          const doc = generateReferencePdf([ref], ref.title);
+          const blob = doc.output('blob');
+          const slug = ref.title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'note';
+          const fileName = `reference_${slug}.pdf`;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url; a.download = fileName;
+          document.body.appendChild(a); a.click(); a.remove();
+          const out = document.getElementById('reference-export-output');
+          if (out) {
+            out.innerHTML = `
+              <div class="summary-box" style="padding:0;overflow:hidden;margin-top:4px;margin-bottom:10px;">
+                <iframe src="${url}" style="width:100%;height:420px;border:0;display:block;"></iframe>
+              </div>
+            `;
+            out.scrollIntoView({ behavior: 'smooth', block: 'center' });
           }
           return;
         }
