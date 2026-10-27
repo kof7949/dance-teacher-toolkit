@@ -15,7 +15,7 @@ const Progress = (() => {
     view: 'list', studentId: null, newStudentStyles: new Set(), manageStyle: null, addingNewCategory: false, newSkillCategoryValue: '', studentSearchQuery: '', addingNewStyle: false,
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
-    editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(), referenceAddFormOpen: false,
+    editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(), referenceAddFormOpen: false, referenceMenuOpenId: null,
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -630,17 +630,23 @@ const Progress = (() => {
     const expanded = state.expandedReferenceIds.has(r.id);
     const bodyText = expanded ? r.body : referencePreviewText(r.body);
     const linkedSong = r.linkedSongId ? cache.songs.find((s) => s.id === r.linkedSongId) : null;
+    const menuOpen = state.referenceMenuOpenId === r.id;
     return `
-      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
+      <div class="student-card reference-card" style="flex-direction:column;align-items:stretch;gap:4px;position:relative;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
           <div style="display:flex;gap:4px;flex-shrink:0;">
             <button class="btn btn-small btn-text" data-action="toggle-reference-pin" data-id="${r.id}" title="${r.pinned ? 'Unpin' : 'Pin to top'}">${r.pinned ? '★' : '☆'}</button>
-            <button class="btn btn-small btn-text" data-action="export-reference-pdf-one" data-id="${r.id}" title="Export this note as PDF">⬇</button>
-            <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
-            <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
+            <button class="btn btn-small btn-text" data-action="toggle-reference-menu" data-id="${r.id}" title="More options">⋮</button>
           </div>
         </div>
+        ${menuOpen ? `
+          <div class="reference-card-menu" data-reference-menu="${r.id}">
+            <button data-action="export-reference-pdf-one" data-id="${r.id}">⬇ Export as PDF</button>
+            <button data-action="edit-reference" data-id="${r.id}">✎ Edit</button>
+            <button class="danger" data-del-reference="${r.id}">✕ Delete</button>
+          </div>
+        ` : ''}
         ${linkedSong ? `<button class="btn btn-small" data-jump-reference="${r.id}">▶ ${fmtTimeShort(r.linkedTime)} · ${escapeHtml(linkedSong.name)}</button>` : ''}
         <div class="sub" style="white-space:pre-wrap;cursor:pointer;" data-toggle-reference="${r.id}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'} ${escapeHtml(bodyText)}</div>
       </div>
@@ -1659,11 +1665,17 @@ const Progress = (() => {
           if (!ref) return;
           state.editingReferenceId = id;
           state.editingReferenceCategoryValue = ref.category;
+          state.referenceMenuOpenId = null;
           return render();
         }
         case 'cancel-reference-edit':
           state.editingReferenceId = null;
           return render();
+        case 'toggle-reference-menu': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          state.referenceMenuOpenId = state.referenceMenuOpenId === id ? null : id;
+          return render();
+        }
         case 'toggle-reference-pin': {
           const id = e.target.closest('[data-id]').dataset.id;
           const ref = cache.trainingReferences.find((r) => r.id === id);
@@ -1702,6 +1714,11 @@ const Progress = (() => {
           const a = document.createElement('a');
           a.href = url; a.download = fileName;
           document.body.appendChild(a); a.click(); a.remove();
+          // Close the card's dropdown menu directly in the DOM rather than going through
+          // render() -- a full render would also wipe the preview iframe we're about to show.
+          state.referenceMenuOpenId = null;
+          const openMenu = e.target.closest('.reference-card-menu');
+          if (openMenu) openMenu.remove();
           const out = document.getElementById('reference-export-output');
           if (out) {
             out.innerHTML = `
