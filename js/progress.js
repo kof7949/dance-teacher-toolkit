@@ -615,6 +615,27 @@ const Progress = (() => {
     return normalized.slice(0, maxLen).trim() + '…';
   }
 
+  function referenceCardHtml(r) {
+    if (r.id === state.editingReferenceId) return referenceEditFormHtml(r);
+    const expanded = state.expandedReferenceIds.has(r.id);
+    const bodyText = expanded ? r.body : referencePreviewText(r.body);
+    const linkedSong = r.linkedSongId ? cache.songs.find((s) => s.id === r.linkedSongId) : null;
+    return `
+      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn btn-small btn-text" data-action="toggle-reference-pin" data-id="${r.id}" title="${r.pinned ? 'Unpin' : 'Pin to top'}">${r.pinned ? '★' : '☆'}</button>
+            <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
+            <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
+          </div>
+        </div>
+        ${linkedSong ? `<button class="btn btn-small" data-jump-reference="${r.id}">▶ ${fmtTimeShort(r.linkedTime)} · ${escapeHtml(linkedSong.name)}</button>` : ''}
+        <div class="sub" style="white-space:pre-wrap;cursor:pointer;" data-toggle-reference="${r.id}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'} ${escapeHtml(bodyText)}</div>
+      </div>
+    `;
+  }
+
   function referenceRowsHtml(query) {
     const q = (query || '').trim().toLowerCase();
     const filtered = q
@@ -625,32 +646,25 @@ const Progress = (() => {
         ? `<div class="empty-state">No notes match "${escapeHtml(query)}".</div>`
         : '<div class="empty-state">No reference notes yet. Add one below.</div>';
     }
+    // Pinned notes get their own section up top, pulled out of category grouping entirely so
+    // a favorite is never buried under whichever category happens to sort first.
+    const pinned = filtered.filter((r) => r.pinned);
+    const rest = filtered.filter((r) => !r.pinned);
     const groups = {};
-    filtered.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
-    return Object.keys(groups).map((cat) => `
+    rest.forEach((r) => { (groups[r.category] = groups[r.category] || []).push(r); });
+    const pinnedHtml = pinned.length ? `
+      <div class="skill-category">
+        <h4>📌 Pinned</h4>
+        ${pinned.map(referenceCardHtml).join('')}
+      </div>
+    ` : '';
+    const groupsHtml = Object.keys(groups).map((cat) => `
       <div class="skill-category">
         <h4>${escapeHtml(cat)}</h4>
-        ${groups[cat].map((r) => {
-          if (r.id === state.editingReferenceId) return referenceEditFormHtml(r);
-          const expanded = state.expandedReferenceIds.has(r.id);
-          const bodyText = expanded ? r.body : referencePreviewText(r.body);
-          const linkedSong = r.linkedSongId ? cache.songs.find((s) => s.id === r.linkedSongId) : null;
-          return `
-            <div class="student-card" style="flex-direction:column;align-items:stretch;gap:4px;">
-              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-                <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
-                <div style="display:flex;gap:4px;flex-shrink:0;">
-                  <button class="btn btn-small btn-text" data-action="edit-reference" data-id="${r.id}" title="Edit note">✎</button>
-                  <button class="dancer-chip-del" data-del-reference="${r.id}" title="Delete note">✕</button>
-                </div>
-              </div>
-              ${linkedSong ? `<button class="btn btn-small" data-jump-reference="${r.id}">▶ ${fmtTimeShort(r.linkedTime)} · ${escapeHtml(linkedSong.name)}</button>` : ''}
-              <div class="sub" style="white-space:pre-wrap;cursor:pointer;" data-toggle-reference="${r.id}" title="${expanded ? 'Collapse' : 'Expand'}">${expanded ? '▾' : '▸'} ${escapeHtml(bodyText)}</div>
-            </div>
-          `;
-        }).join('')}
+        ${groups[cat].map(referenceCardHtml).join('')}
       </div>
     `).join('');
+    return pinnedHtml + groupsHtml;
   }
 
   function renderTrainingReference() {
@@ -1477,6 +1491,14 @@ const Progress = (() => {
         case 'cancel-reference-edit':
           state.editingReferenceId = null;
           return render();
+        case 'toggle-reference-pin': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const ref = cache.trainingReferences.find((r) => r.id === id);
+          if (!ref) return;
+          ref.pinned = !ref.pinned;
+          await DB.put('trainingReferences', ref);
+          return render();
+        }
         case 'save-reference-edit': {
           const id = e.target.closest('[data-id]').dataset.id;
           const ref = cache.trainingReferences.find((r) => r.id === id);
