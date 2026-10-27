@@ -574,22 +574,32 @@ const Progress = (() => {
       ? state.editingReferenceCategoryValue
       : r.category;
     return `
-      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:6px;">
-        <textarea id="edit-reference-title" rows="1">${escapeHtml(r.title)}</textarea>
-        <select id="edit-reference-category-select" class="song-select">
-          ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-          <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
-        </select>
-        ${selectedCatValue === '__new__' ? `<textarea id="edit-reference-category-new" placeholder="New category name" rows="1"></textarea>` : ''}
-        <textarea id="edit-reference-body" rows="3">${escapeHtml(r.body)}</textarea>
-        <div class="add-row" style="margin-bottom:0;">
+      <div class="student-card" style="flex-direction:column;align-items:stretch;gap:0;">
+        <div class="add-row">
+          <textarea id="edit-reference-title" rows="1">${escapeHtml(r.title)}</textarea>
+        </div>
+        <div class="add-row">
+          <select id="edit-reference-category-select" class="song-select">
+            ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+            <option value="__new__" ${selectedCatValue === '__new__' ? 'selected' : ''}>+ New category</option>
+          </select>
+        </div>
+        ${selectedCatValue === '__new__' ? `
+          <div class="add-row">
+            <textarea id="edit-reference-category-new" placeholder="New category name" rows="1"></textarea>
+          </div>
+        ` : ''}
+        <div class="add-row">
+          <textarea id="edit-reference-body" rows="3">${escapeHtml(r.body)}</textarea>
+        </div>
+        <div class="add-row">
           <select id="edit-reference-song-select" class="song-select">
             <option value="">No video link</option>
             ${cache.songs.map((s) => `<option value="${s.id}" ${r.linkedSongId === s.id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
           </select>
           <input type="text" id="edit-reference-song-time" placeholder="Timestamp, e.g. 1:23" style="flex:0 0 120px;" value="${r.linkedSongId ? fmtTimeShort(r.linkedTime) : ''}" />
         </div>
-        <div class="tag-buttons" style="margin-bottom:0;">
+        <div class="tag-buttons" style="margin-bottom:14px;">
           <button class="btn btn-small btn-text" data-action="use-edit-reference-current-position" type="button">📍 Use current position from Music &amp; Count</button>
           <span id="edit-reference-position-hint" class="sub"></span>
         </div>
