@@ -389,6 +389,17 @@ main {
 .student-card .name { font-weight: 600; white-space: pre-wrap; }
 .student-card .sub { color: var(--text-dim); font-size: 0.78rem; margin-top: 2px; }
 
+.reference-card-action {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 10px;
+  min-width: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .reference-card-menu {
   position: absolute;
   top: 38px;

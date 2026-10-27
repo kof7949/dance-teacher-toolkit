@@ -635,9 +635,9 @@ const Progress = (() => {
       <div class="student-card reference-card" style="flex-direction:column;align-items:stretch;gap:4px;position:relative;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
           <div class="name">${escapeHtml(r.title)} <span class="sub" style="font-weight:400;">· ${fmtDateWithYear(r.createdAt)}</span></div>
-          <div style="display:flex;gap:4px;flex-shrink:0;">
-            <button class="btn btn-small btn-text" data-action="toggle-reference-pin" data-id="${r.id}" title="${r.pinned ? 'Unpin' : 'Pin to top'}">${r.pinned ? '★' : '☆'}</button>
-            <button class="btn btn-small btn-text" data-action="toggle-reference-menu" data-id="${r.id}" title="More options">⋮</button>
+          <div style="display:flex;gap:2px;flex-shrink:0;">
+            <button class="btn btn-text reference-card-action" data-action="toggle-reference-pin" data-id="${r.id}" title="${r.pinned ? 'Unpin' : 'Pin to top'}">${r.pinned ? '★' : '☆'}</button>
+            <button class="btn btn-text reference-card-action" data-action="toggle-reference-menu" data-id="${r.id}" title="More options">⋮</button>
           </div>
         </div>
         ${menuOpen ? `
