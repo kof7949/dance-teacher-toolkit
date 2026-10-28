@@ -1413,6 +1413,7 @@ const Progress = (() => {
         return render();
       }
       if (delMilestoneAttr) {
+        if (!confirm('Remove this milestone?')) return;
         const [goalId, milestoneId] = delMilestoneAttr.split(':');
         const goal = cache.trainingGoals.find((g) => g.id === goalId);
         if (!goal) return;

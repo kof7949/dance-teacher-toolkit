@@ -725,6 +725,7 @@ const Music = (() => {
       }
       const delBtn = e.target.closest('[data-del]');
       if (delBtn) {
+        if (!confirm('Delete this count marker?')) return;
         DB.delete('counts', delBtn.dataset.del).then(async () => {
           const tags = await DB.getAllByIndex('counts', 'bySong', currentSong.id);
           renderTags(tags.sort((a, b) => a.time - b.time));
