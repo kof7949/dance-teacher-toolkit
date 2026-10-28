@@ -62,14 +62,25 @@ async function startApp() {
       reloadingForUpdate = true;
       window.location.reload();
     });
-    window.addEventListener('load', () => {
+    const registerSw = () => {
       navigator.serviceWorker.register('sw.js').then((reg) => {
         // Cache-first service workers can otherwise keep serving stale JS for a long time:
         // explicitly ask the browser to check for a new sw.js on every launch, rather than
         // waiting for its own internal update schedule.
         reg.update().catch(() => {});
       }).catch(() => {});
-    });
+    };
+    // startApp() only runs after the lock screen is dismissed, and awaits several IndexedDB
+    // opens before reaching here -- by then the window's own 'load' event may have already
+    // fired (the page's own assets can finish before those DB opens do), in which case
+    // addEventListener('load', ...) would never call back and the service worker -- and so
+    // all offline support -- would silently never get installed. Register immediately when
+    // the page is already done loading instead of only ever waiting for that event.
+    if (document.readyState === 'complete') {
+      registerSw();
+    } else {
+      window.addEventListener('load', registerSw);
+    }
   }
 
   window.forceAppUpdate = async function forceAppUpdate() {
