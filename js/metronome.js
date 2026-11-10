@@ -825,7 +825,7 @@ const Metronome = (() => {
         <div style="display:flex; justify-content:center; margin:12px 0 2px;">
           <label class="switch">
             <input type="checkbox" id="ramp-toggle" ${state.rampEnabled ? 'checked' : ''} />
-            <span>Tempo Ramp</span>
+            <span>Speed Change</span>
           </label>
         </div>
         ${state.rampEnabled ? `
