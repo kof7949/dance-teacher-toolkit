@@ -133,8 +133,21 @@ const Metronome = (() => {
     };
   }
 
+  // ---------- Tempo Ramp ----------
+  // Lets a practice run start at a comfortable BPM and automatically climb to a target tempo
+  // every few bars, instead of the dancer manually nudging the BPM dial. Bar-based rather than
+  // time-based so a bump always lands on a clean musical boundary, never mid-phrase, and so it
+  // can piggyback on the beat/step counters the scheduler already tracks instead of a separate
+  // wall-clock timer that could drift relative to playback.
+  const RAMP_STEP_OPTIONS = [1, 2, 3, 5];
+  const RAMP_BARS_OPTIONS = [2, 4, 8, 16];
+  const BEATS_PER_BAR_CLASSIC = 4;
+
   let root;
-  let state = { bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false, mode: 'classic', grooveAccentMode: false };
+  let state = {
+    bpm: DEFAULT_BPM, sound: 'kick', countLength: DEFAULT_COUNT_LENGTH, playing: false, videoExpanded: false, mode: 'classic', grooveAccentMode: false,
+    rampEnabled: false, rampStartBpm: DEFAULT_BPM, rampTargetBpm: DEFAULT_BPM + 20, rampStepBpm: 2, rampBarsPerStep: 4,
+  };
   let audioCtx = null;
   let schedulerTimer = null;
   let nextNoteTime = 0;
@@ -149,6 +162,8 @@ const Metronome = (() => {
   let grooveBuffers = {};
   let grooveBuffersLoading = null;
   let grooveMasterNode = null;
+  let rampUnitCounter = 0; // beats (Classic) or 16th-steps (Groove) elapsed since the ramp last reset
+  let rampBarsCompleted = 0;
 
   function loadSettings() {
     try {
@@ -160,6 +175,11 @@ const Metronome = (() => {
         if (COUNT_LENGTHS.includes(saved.countLength)) state.countLength = saved.countLength;
         if (saved.mode === 'groove' || saved.mode === 'classic') state.mode = saved.mode;
         if (typeof saved.grooveAccentMode === 'boolean') state.grooveAccentMode = saved.grooveAccentMode;
+        if (typeof saved.rampEnabled === 'boolean') state.rampEnabled = saved.rampEnabled;
+        if (Number.isFinite(saved.rampStartBpm)) state.rampStartBpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.rampStartBpm));
+        if (Number.isFinite(saved.rampTargetBpm)) state.rampTargetBpm = Math.min(MAX_BPM, Math.max(MIN_BPM, saved.rampTargetBpm));
+        if (RAMP_STEP_OPTIONS.includes(saved.rampStepBpm)) state.rampStepBpm = saved.rampStepBpm;
+        if (RAMP_BARS_OPTIONS.includes(saved.rampBarsPerStep)) state.rampBarsPerStep = saved.rampBarsPerStep;
         if (saved.groovePattern && Array.isArray(saved.groovePattern.tracks)) {
           groovePattern = saved.groovePattern;
           grooveActivePresetId = saved.grooveActivePresetId || null;
@@ -177,6 +197,8 @@ const Metronome = (() => {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify({
         bpm: state.bpm, sound: state.sound, countLength: state.countLength,
         mode: state.mode, grooveAccentMode: state.grooveAccentMode, groovePattern, grooveActivePresetId,
+        rampEnabled: state.rampEnabled, rampStartBpm: state.rampStartBpm, rampTargetBpm: state.rampTargetBpm,
+        rampStepBpm: state.rampStepBpm, rampBarsPerStep: state.rampBarsPerStep,
       }));
     } catch (err) { /* ignore */ }
   }
@@ -394,6 +416,7 @@ const Metronome = (() => {
       beatCounter = (beatCounter % state.countLength) + 1;
       scheduleCountDisplay(nextNoteTime, beatCounter);
       nextNoteTime += 60 / state.bpm;
+      tickRamp(BEATS_PER_BAR_CLASSIC);
     }
   }
 
@@ -415,6 +438,7 @@ const Metronome = (() => {
       const swing = groovePattern.swing || 0;
       nextNoteTime += (idx % 2 === 0) ? interval * (1 + swing) : interval * (1 - swing);
       grooveStepIndex++;
+      tickRamp(STEPS_PER_BAR);
     }
   }
 
@@ -441,12 +465,20 @@ const Metronome = (() => {
     } else {
       beatCounter = 0;
     }
+    // Each fresh Play press starts the climb over from the beginning, like restarting an
+    // interval-training run, rather than resuming from wherever a prior session left off.
+    if (state.rampEnabled) {
+      state.bpm = state.rampStartBpm;
+      rampUnitCounter = 0;
+      rampBarsCompleted = 0;
+    }
     state.playing = true;
     nextNoteTime = audioCtx.currentTime + 0.05;
     scheduler();
     schedulerTimer = setInterval(scheduler, LOOKAHEAD_MS);
     requestWakeLock();
     updatePlayButton();
+    updateBpmDisplay();
   }
 
   function stopPlaying() {
@@ -466,6 +498,60 @@ const Metronome = (() => {
     state.bpm = Math.min(MAX_BPM, Math.max(MIN_BPM, value));
     saveSettings();
     render();
+  }
+
+  function rampStatusText() {
+    if (!state.rampEnabled) return '';
+    if (state.bpm === state.rampTargetBpm) return `Holding at target: ${state.rampTargetBpm} BPM`;
+    return `Ramping ${state.rampStartBpm} → ${state.rampTargetBpm} BPM · now ${state.bpm} · +${state.rampStepBpm} every ${state.rampBarsPerStep} bars`;
+  }
+
+  // A lightweight DOM patch for the once-per-bar tempo bump, instead of a full render() --
+  // full re-renders rebuild the Groove step grid's innerHTML, which would be disruptive if it
+  // happened mid-tap on a step.
+  function updateBpmDisplay() {
+    const input = document.getElementById('metro-bpm-input');
+    if (input) input.value = state.bpm;
+    const slider = document.getElementById('metro-bpm-slider');
+    if (slider) slider.value = state.bpm;
+    const status = document.getElementById('ramp-status');
+    if (status) status.textContent = rampStatusText();
+  }
+
+  function setRampEnabled(enabled) {
+    state.rampEnabled = enabled;
+    if (enabled && !state.playing) state.bpm = state.rampStartBpm;
+    saveSettings();
+    render();
+  }
+
+  function setRampStartBpm(value) {
+    state.rampStartBpm = value;
+    if (state.rampEnabled && !state.playing) state.bpm = value;
+    saveSettings();
+    render();
+  }
+
+  function setRampTargetBpm(value) {
+    state.rampTargetBpm = value;
+    saveSettings();
+    render();
+  }
+
+  // Called once per scheduled beat (Classic) or 16th-step (Groove). unitsPerBar converts that
+  // into "how many bars have elapsed", so the same logic drives both modes.
+  function tickRamp(unitsPerBar) {
+    if (!state.rampEnabled) return;
+    rampUnitCounter++;
+    const bars = Math.floor(rampUnitCounter / unitsPerBar);
+    if (bars <= rampBarsCompleted) return;
+    rampBarsCompleted = bars;
+    if (rampBarsCompleted % state.rampBarsPerStep !== 0) return;
+    const direction = state.rampTargetBpm >= state.rampStartBpm ? 1 : -1;
+    const next = state.bpm + direction * state.rampStepBpm;
+    const reachedTarget = direction > 0 ? next >= state.rampTargetBpm : next <= state.rampTargetBpm;
+    state.bpm = reachedTarget ? state.rampTargetBpm : next;
+    updateBpmDisplay();
   }
 
   // ---------- Groove Lab editing ----------
@@ -736,6 +822,28 @@ const Metronome = (() => {
           </div>
         </div>
 
+        <div style="display:flex; justify-content:center; margin:12px 0 2px;">
+          <label class="switch">
+            <input type="checkbox" id="ramp-toggle" ${state.rampEnabled ? 'checked' : ''} />
+            <span>Tempo Ramp</span>
+          </label>
+        </div>
+        ${state.rampEnabled ? `
+          <div class="add-row">
+            <input type="number" id="ramp-start-bpm" inputmode="numeric" min="${MIN_BPM}" max="${MAX_BPM}" value="${state.rampStartBpm}" placeholder="Start BPM" />
+            <input type="number" id="ramp-target-bpm" inputmode="numeric" min="${MIN_BPM}" max="${MAX_BPM}" value="${state.rampTargetBpm}" placeholder="Target BPM" />
+          </div>
+          <div class="add-row">
+            <select id="ramp-step-bpm" class="song-select">
+              ${RAMP_STEP_OPTIONS.map((v) => `<option value="${v}" ${state.rampStepBpm === v ? 'selected' : ''}>+${v} BPM</option>`).join('')}
+            </select>
+            <select id="ramp-bars-per-step" class="song-select">
+              ${RAMP_BARS_OPTIONS.map((v) => `<option value="${v}" ${state.rampBarsPerStep === v ? 'selected' : ''}>every ${v} bars</option>`).join('')}
+            </select>
+          </div>
+          <div class="tag-label" style="text-align:center;" id="ramp-status">${rampStatusText()}</div>
+        ` : ''}
+
         <div class="tag-buttons" style="justify-content:center; margin: 14px 0 4px;">
           <button class="chip ${state.mode === 'classic' ? 'active' : ''}" data-metro-mode="classic">Classic</button>
           <button class="chip ${state.mode === 'groove' ? 'active' : ''}" data-metro-mode="groove">Groove</button>
@@ -863,6 +971,27 @@ const Metronome = (() => {
     }
     if (e.target.id === 'groove-accent-toggle') {
       setGrooveAccentMode(e.target.checked);
+    }
+    if (e.target.id === 'ramp-toggle') {
+      setRampEnabled(e.target.checked);
+    }
+    if (e.target.id === 'ramp-start-bpm') {
+      const v = Number(e.target.value);
+      if (Number.isFinite(v) && e.target.value.trim() !== '') setRampStartBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, v)));
+    }
+    if (e.target.id === 'ramp-target-bpm') {
+      const v = Number(e.target.value);
+      if (Number.isFinite(v) && e.target.value.trim() !== '') setRampTargetBpm(Math.min(MAX_BPM, Math.max(MIN_BPM, v)));
+    }
+    if (e.target.id === 'ramp-step-bpm') {
+      state.rampStepBpm = Number(e.target.value);
+      saveSettings();
+      render();
+    }
+    if (e.target.id === 'ramp-bars-per-step') {
+      state.rampBarsPerStep = Number(e.target.value);
+      saveSettings();
+      render();
     }
   }
 
