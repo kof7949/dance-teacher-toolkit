@@ -141,7 +141,6 @@ const Metronome = (() => {
   // wall-clock timer that could drift relative to playback.
   const RAMP_STEP_OPTIONS = [1, 2, 3, 5];
   const RAMP_BARS_OPTIONS = [2, 4, 8, 16];
-  const BEATS_PER_BAR_CLASSIC = 4;
 
   let root;
   let state = {
@@ -416,7 +415,9 @@ const Metronome = (() => {
       beatCounter = (beatCounter % state.countLength) + 1;
       scheduleCountDisplay(nextNoteTime, beatCounter);
       nextNoteTime += 60 / state.bpm;
-      tickRamp(BEATS_PER_BAR_CLASSIC);
+      // "1 bar" here means one full count cycle (4/8/16-count), so a ramp step always lands
+      // at the start of a fresh count instead of partway through one.
+      tickRamp(state.countLength);
     }
   }
 
