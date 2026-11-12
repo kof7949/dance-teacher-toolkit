@@ -919,18 +919,22 @@ const Progress = (() => {
     const catsHtml = catNames.map((cat) => `
       <div class="skill-category" data-training-category-drop="${escapeHtml(cat)}">
         <h4>${escapeHtml(cat)}</h4>
-        ${groups[cat].map((s) => `
-          <div class="skill-row drag-row" data-training-skill-row="${s.id}" style="flex-direction:row;align-items:center;justify-content:space-between;">
-            ${s.id === state.editingTrainingSkillId ? `
-              <input type="text" id="rename-training-skill-input" value="${escapeHtml(s.name)}" style="flex:1;margin-right:8px;" />
+        ${groups[cat].map((s) => s.id === state.editingTrainingSkillId ? `
+          <div class="student-card" style="flex-direction:column;align-items:stretch;gap:0;">
+            <div class="add-row">
+              <textarea id="rename-training-skill-input" rows="1">${escapeHtml(s.name)}</textarea>
+            </div>
+            <div style="display:flex;gap:6px;">
               <button class="btn btn-small" data-action="save-rename-training-skill" data-id="${s.id}">Save</button>
               <button class="btn btn-small btn-text" data-action="cancel-rename-training-skill">Cancel</button>
-            ` : `
-              <span class="drag-handle" data-drag-training-skill="${s.id}" title="Drag to reorder or move to another category">⠿</span>
-              <span class="skill-name" style="flex:1;margin:0 8px;">${escapeHtml(s.name)}</span>
-              <button class="btn btn-small btn-text" data-action="start-rename-training-skill" data-id="${s.id}">Rename</button>
-              <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
-            `}
+            </div>
+          </div>
+        ` : `
+          <div class="skill-row drag-row" data-training-skill-row="${s.id}" style="flex-direction:row;align-items:center;justify-content:space-between;">
+            <span class="drag-handle" data-drag-training-skill="${s.id}" title="Drag to reorder or move to another category">⠿</span>
+            <span class="skill-name" style="flex:1;margin:0 8px;">${escapeHtml(s.name)}</span>
+            <button class="btn btn-small btn-text" data-action="start-rename-training-skill" data-id="${s.id}">Rename</button>
+            <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
           </div>
         `).join('')}
       </div>
