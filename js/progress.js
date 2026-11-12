@@ -479,19 +479,19 @@ const Progress = (() => {
   function renderTrainingGoals() {
     const goalsHtml = cache.trainingGoals.length
       ? sortedTrainingGoals().map(goalCardHtml).join('')
-      : '<div class="empty-state">No goals yet. Set one below.</div>';
+      : '<div class="empty-state">No goals yet. Set one above.</div>';
 
     return `
       <div class="back-row">
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
       <div class="section-title" style="margin-top:0;">🎯 Goals</div>
-      <div class="student-list">${goalsHtml}</div>
-      <div class="add-row" style="margin-top:12px;">
+      <div class="add-row">
         <textarea id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" rows="1"></textarea>
         <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
       </div>
-      <button class="btn btn-small" data-action="add-goal">Add goal</button>
+      <button class="btn btn-small" data-action="add-goal" style="margin-bottom:12px;">Add goal</button>
+      <div class="student-list">${goalsHtml}</div>
     `;
   }
 
