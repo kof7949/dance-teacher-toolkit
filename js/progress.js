@@ -485,8 +485,11 @@ const Progress = (() => {
       <div class="back-row">
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
-      <div class="section-title" style="margin-top:0;">🎯 Goals</div>
-      <button class="btn btn-small" data-action="toggle-goal-add-form" style="margin-bottom:12px;">${state.goalAddFormOpen ? '✕ Close' : '+ Add goal'}</button>
+      <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
+        <span>🎯 Goals</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-small" data-action="toggle-goal-add-form">${state.goalAddFormOpen ? '✕ Close' : '+ Add goal'}</button>
+      </div>
       ${state.goalAddFormOpen ? `
         <div class="add-row">
           <textarea id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" rows="1"></textarea>
@@ -534,8 +537,11 @@ const Progress = (() => {
       <div class="back-row">
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
-      <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
-      <button class="btn btn-text" data-action="training-manage-skills" style="margin-bottom:8px;">Edit my skills checklist</button>
+      <div class="section-title" style="margin-top:0; display:flex; align-items:center; gap:8px;">
+        <span>🧑‍🏫 My Skills</span>
+        <div style="flex:1"></div>
+        <button class="btn btn-text" data-action="training-manage-skills">Edit my skills checklist</button>
+      </div>
       ${skillsHtml}
       <div class="section-title">Recent updates</div>
       <div class="summary-box">${historyHtml}</div>
