@@ -517,7 +517,7 @@ const Progress = (() => {
             }).join('')}
           </div>
         `).join('')
-      : '<div class="empty-state">No training skills yet. Use "Edit my skills checklist" below to add your first one.</div>';
+      : '<div class="empty-state">No training skills yet. Use "Edit my skills checklist" above to add your first one.</div>';
 
     const historyHtml = cache.trainingHistory.length
       ? cache.trainingHistory.map((h) => {
@@ -532,8 +532,8 @@ const Progress = (() => {
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
       <div class="section-title" style="margin-top:0;">🧑‍🏫 My Skills</div>
+      <button class="btn btn-text" data-action="training-manage-skills" style="margin-bottom:8px;">Edit my skills checklist</button>
       ${skillsHtml}
-      <button class="btn btn-text" data-action="training-manage-skills" style="margin-top:8px;">Edit my skills checklist</button>
       <div class="section-title">Recent updates</div>
       <div class="summary-box">${historyHtml}</div>
     `;
