@@ -16,6 +16,7 @@ const Progress = (() => {
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
     editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(), referenceAddFormOpen: false, referenceMenuOpenId: null,
+    editingTrainingSkillId: null,
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -911,8 +912,15 @@ const Progress = (() => {
         <h4>${escapeHtml(cat)}</h4>
         ${groups[cat].map((s) => `
           <div class="skill-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
-            <span class="skill-name" style="flex:1;margin-right:8px;">${escapeHtml(s.name)}</span>
-            <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
+            ${s.id === state.editingTrainingSkillId ? `
+              <input type="text" id="rename-training-skill-input" value="${escapeHtml(s.name)}" style="flex:1;margin-right:8px;" />
+              <button class="btn btn-small" data-action="save-rename-training-skill" data-id="${s.id}">Save</button>
+              <button class="btn btn-small btn-text" data-action="cancel-rename-training-skill">Cancel</button>
+            ` : `
+              <span class="skill-name" style="flex:1;margin-right:8px;">${escapeHtml(s.name)}</span>
+              <button class="btn btn-small btn-text" data-action="start-rename-training-skill" data-id="${s.id}">Rename</button>
+              <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
+            `}
           </div>
         `).join('')}
       </div>
@@ -1629,6 +1637,28 @@ const Progress = (() => {
           }
           await DB.put('trainingSkills', { id: DB.uid(), name, category, order: cache.trainingSkills.length });
           state.trainingNewSkillCategoryValue = category;
+          return render();
+        }
+        case 'start-rename-training-skill': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          state.editingTrainingSkillId = id;
+          return render();
+        }
+        case 'cancel-rename-training-skill': {
+          state.editingTrainingSkillId = null;
+          return render();
+        }
+        case 'save-rename-training-skill': {
+          const id = e.target.closest('[data-id]').dataset.id;
+          const input = document.getElementById('rename-training-skill-input');
+          const name = input ? input.value.trim() : '';
+          if (!name) return;
+          const skill = cache.trainingSkills.find((s) => s.id === id);
+          if (!skill) return;
+          skill.name = name;
+          await DB.put('trainingSkills', skill);
+          state.editingTrainingSkillId = null;
+          await loadAll();
           return render();
         }
         case 'add-journal-entry': {
