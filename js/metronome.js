@@ -139,8 +139,8 @@ const Metronome = (() => {
   // time-based so a bump always lands on a clean musical boundary, never mid-phrase, and so it
   // can piggyback on the beat/step counters the scheduler already tracks instead of a separate
   // wall-clock timer that could drift relative to playback.
-  const RAMP_STEP_OPTIONS = [1, 2, 3, 5];
-  const RAMP_BARS_OPTIONS = [2, 4, 8, 16];
+  const RAMP_STEP_OPTIONS = [1, 2, 3, 5, 10];
+  const RAMP_BARS_OPTIONS = [1, 2, 4, 8, 16];
 
   let root;
   let state = {
