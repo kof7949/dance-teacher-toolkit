@@ -917,16 +917,17 @@ const Progress = (() => {
       : (catNames[0] || '__new__');
 
     const catsHtml = catNames.map((cat) => `
-      <div class="skill-category">
+      <div class="skill-category" data-training-category-drop="${escapeHtml(cat)}">
         <h4>${escapeHtml(cat)}</h4>
         ${groups[cat].map((s) => `
-          <div class="skill-row" style="flex-direction:row;align-items:center;justify-content:space-between;">
+          <div class="skill-row drag-row" data-training-skill-row="${s.id}" style="flex-direction:row;align-items:center;justify-content:space-between;">
             ${s.id === state.editingTrainingSkillId ? `
               <input type="text" id="rename-training-skill-input" value="${escapeHtml(s.name)}" style="flex:1;margin-right:8px;" />
               <button class="btn btn-small" data-action="save-rename-training-skill" data-id="${s.id}">Save</button>
               <button class="btn btn-small btn-text" data-action="cancel-rename-training-skill">Cancel</button>
             ` : `
-              <span class="skill-name" style="flex:1;margin-right:8px;">${escapeHtml(s.name)}</span>
+              <span class="drag-handle" data-drag-training-skill="${s.id}" title="Drag to reorder or move to another category">⠿</span>
+              <span class="skill-name" style="flex:1;margin:0 8px;">${escapeHtml(s.name)}</span>
               <button class="btn btn-small btn-text" data-action="start-rename-training-skill" data-id="${s.id}">Rename</button>
               <button class="btn btn-small btn-danger" data-del-training-skill="${s.id}">Remove</button>
             `}
@@ -940,6 +941,7 @@ const Progress = (() => {
         <button class="btn btn-small" data-action="training-back-to-skills">← Back</button>
       </div>
       <div class="section-title">Edit my skills checklist</div>
+      ${catNames.length ? '<div class="tag-label">Drag ⠿ on a skill to reorder it or move it into another category.</div>' : ''}
       <div class="add-row">
         <select id="new-training-skill-category-select" class="song-select" style="flex:0 0 45%">
           ${catNames.map((c) => `<option value="${escapeHtml(c)}" ${selectedCatValue === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
@@ -1151,6 +1153,32 @@ const Progress = (() => {
       return;
     }
 
+    if (dragState.type === 'training-skill') {
+      dragState.targetCategory = null;
+      dragState.insertBeforeSkillId = null;
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      const catBox = under && under.closest('[data-training-category-drop]');
+      if (!catBox) return;
+      catBox.classList.add('drop-target-hover');
+      dragState.targetCategory = catBox.dataset.trainingCategoryDrop;
+
+      const rows = Array.from(catBox.querySelectorAll('.skill-row[data-training-skill-row]'));
+      const rowUnder = under.closest('.skill-row[data-training-skill-row]');
+      if (rowUnder && catBox.contains(rowUnder)) {
+        const rect = rowUnder.getBoundingClientRect();
+        const isTopHalf = e.clientY < rect.top + rect.height / 2;
+        const idx = rows.indexOf(rowUnder);
+        if (isTopHalf) {
+          rowUnder.classList.add('drag-insert-before');
+          dragState.insertBeforeSkillId = rowUnder.dataset.trainingSkillRow;
+        } else {
+          rowUnder.classList.add('drag-insert-after');
+          dragState.insertBeforeSkillId = rows[idx + 1] ? rows[idx + 1].dataset.trainingSkillRow : null;
+        }
+      }
+      return;
+    }
+
     dragState.targetCategory = null;
     dragState.insertBeforeSkillId = null;
     const under = document.elementFromPoint(e.clientX, e.clientY);
@@ -1197,6 +1225,42 @@ const Progress = (() => {
       reordered.splice(insertIndex, 0, category);
       await saveCategoryOrder(activeStyle, reordered);
       await render();
+      return;
+    }
+
+    if (type === 'training-skill') {
+      const { skillId, targetCategory, insertBeforeSkillId } = dragState;
+      dragState = null;
+      if (!targetCategory) return;
+
+      const skill = cache.trainingSkills.find((s) => s.id === skillId);
+      if (!skill) return;
+
+      const targetList = cache.trainingSkills
+        .filter((s) => s.category === targetCategory && s.id !== skillId)
+        .sort((a, b) => a.order - b.order);
+
+      let insertIndex = targetList.length;
+      if (insertBeforeSkillId) {
+        const idx = targetList.findIndex((s) => s.id === insertBeforeSkillId);
+        if (idx !== -1) insertIndex = idx;
+      }
+      targetList.splice(insertIndex, 0, skill);
+
+      let anyChanged = false;
+      for (let i = 0; i < targetList.length; i++) {
+        const s = targetList[i];
+        if (s.order !== i || s.category !== targetCategory) {
+          s.order = i;
+          s.category = targetCategory;
+          await DB.put('trainingSkills', s);
+          anyChanged = true;
+        }
+      }
+      if (anyChanged) {
+        await loadAll();
+        await render();
+      }
       return;
     }
 
@@ -1252,6 +1316,18 @@ const Progress = (() => {
         ghost.style.width = rect.width + 'px';
         document.body.appendChild(ghost);
         dragState = { type: 'category', category, ghost, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+      } else if (handle.dataset.dragTrainingSkill) {
+        const skillId = handle.dataset.dragTrainingSkill;
+        const row = handle.closest('.skill-row');
+        const rect = row.getBoundingClientRect();
+        const ghost = document.createElement('div');
+        ghost.className = 'drag-ghost';
+        ghost.textContent = row.querySelector('.skill-name').textContent;
+        ghost.style.left = rect.left + 'px';
+        ghost.style.top = rect.top + 'px';
+        ghost.style.width = rect.width + 'px';
+        document.body.appendChild(ghost);
+        dragState = { type: 'training-skill', skillId, ghost, offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
       } else {
         const skillId = handle.dataset.dragSkill;
         const row = handle.closest('.skill-row');
