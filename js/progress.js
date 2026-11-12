@@ -16,7 +16,7 @@ const Progress = (() => {
     mode: 'students', trainingView: 'home', trainingAddingNewCategory: false, trainingNewSkillCategoryValue: '',
     trainingReferenceSearchQuery: '', trainingReferenceNewCategoryValue: '',
     editingReferenceId: null, editingReferenceCategoryValue: '', expandedReferenceIds: new Set(), referenceAddFormOpen: false, referenceMenuOpenId: null,
-    editingTrainingSkillId: null,
+    editingTrainingSkillId: null, goalAddFormOpen: false,
   };
   let cache = {
     students: [], skills: [], styles: [], categoryOrder: {}, progressByStudent: {}, historyByStudent: {},
@@ -486,11 +486,14 @@ const Progress = (() => {
         <button class="btn btn-small" data-action="training-back-to-home">← Back</button>
       </div>
       <div class="section-title" style="margin-top:0;">🎯 Goals</div>
-      <div class="add-row">
-        <textarea id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" rows="1"></textarea>
-        <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
-      </div>
-      <button class="btn btn-small" data-action="add-goal" style="margin-bottom:12px;">Add goal</button>
+      <button class="btn btn-small" data-action="toggle-goal-add-form" style="margin-bottom:12px;">${state.goalAddFormOpen ? '✕ Close' : '+ Add goal'}</button>
+      ${state.goalAddFormOpen ? `
+        <div class="add-row">
+          <textarea id="new-goal-title" placeholder="New goal, e.g. 'Clean triple pirouette'" rows="1"></textarea>
+          <input type="date" id="new-goal-date" style="flex:0 0 140px;" />
+        </div>
+        <button class="btn btn-small" data-action="add-goal" style="margin-bottom:12px;">Add goal</button>
+      ` : ''}
       <div class="student-list">${goalsHtml}</div>
     `;
   }
@@ -1458,6 +1461,7 @@ const Progress = (() => {
       if (trainingTile) {
         state.trainingView = trainingTile;
         state.referenceAddFormOpen = false;
+        state.goalAddFormOpen = false;
         return render();
       }
       if (setTrainingLevelAttr) {
@@ -1601,12 +1605,16 @@ const Progress = (() => {
         case 'training-back-to-home':
           state.trainingView = 'home';
           state.referenceAddFormOpen = false;
+          state.goalAddFormOpen = false;
           return render();
         case 'training-back-to-skills':
           state.trainingView = 'skills';
           return render();
         case 'toggle-reference-add-form':
           state.referenceAddFormOpen = !state.referenceAddFormOpen;
+          return render();
+        case 'toggle-goal-add-form':
+          state.goalAddFormOpen = !state.goalAddFormOpen;
           return render();
         case 'use-reference-current-position':
         case 'use-edit-reference-current-position': {
@@ -1801,6 +1809,7 @@ const Progress = (() => {
             id: DB.uid(), title, targetDate, completed: false, milestones: [],
             order: cache.trainingGoals.length, createdAt: Date.now(),
           });
+          state.goalAddFormOpen = false;
           return render();
         }
         case 'add-style': {
